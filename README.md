@@ -1,0 +1,2 @@
+# pyWidgets
+Modified Qt Classes
