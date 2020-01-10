@@ -1,16 +1,54 @@
 import shutil
 import os
 import datetime
+import time
+import tarfile
 
+
+def make_tarxz(output_filename, source_dir):
+    with tarfile.open(output_filename, "w:xz") as tar:
+        tar.add(source_dir, arcname=os.path.basename(source_dir))
+
+
+def print_time_diff(taskstr, start, finish):
+    minutes = int((finish - start) / 60)
+    seconds = int((finish - start) - 60 * minutes)
+    string = "{} Spent: {} min {} secs.".format(taskstr, minutes, seconds)
+    print(string)
+    return string
+
+
+def get_datetime_string_now():
+    now = datetime.datetime.now()
+    date = now.date()
+    timeobj = now.time()
+    timestr = "{0:02d}{1:02d}{2:02d}".format(timeobj.hour, timeobj.minute, timeobj.second)
+    return timestr
 
 def main():
+    start_time = time.time()
     cur_dir = "."
     entrance_file = "main.py"
     work_dir = "./build"
     dist_dir = "./dist"
     icon_file = "icon.ico"
-    copy_dir = ["./dark", "./light"]
-    copy_file = ["./light.qss", "./dark.qss", "logo_login.png", "logo_yxy_square.png", "logo_window.png", "logo_zjdxyxy.png", "database.db", "icon.ico"]
+    copy_dir = [
+        "./dark",
+        "./light",
+        "./font",
+        "./pic",
+    ]
+    copy_file = [
+        "./light.qss",
+        "./dark.qss",
+        "logo_login.png",
+        "logo_login_cropped.png",
+        "logo_yxy_square.png",
+        "logo_window.png",
+        "logo_zjdxyxy.png",
+        "database.db",
+        "icon.ico"
+    ]
     options = "-w --icon={} ".format(icon_file)
     if os.path.exists(work_dir):
         if os.path.isdir(work_dir):
@@ -42,13 +80,18 @@ def main():
             if os.path.isfile(target_dir):
                 os.remove(target_dir)
         shutil.copyfile(i, os.path.join(exe_dir, i))
+    timestr = get_datetime_string_now()
+    # shutil.make_archive("{}-{}-{}".format(dist_subdir[0],date,timestr), "zip", exe_dir)
     now = datetime.datetime.now()
     date = now.date()
-    timeobj = now.time()
-    timestr = "{0:02d}{1:02d}{2:02d}".format(timeobj.hour, timeobj.minute, timeobj.second)
-    shutil.make_archive("{}-{}-{}".format(dist_subdir[0],date,timestr), "zip", exe_dir)
+    generate_finish = time.time()
+    print_time_diff(finish=generate_finish, start=start_time, taskstr="Generating")
+    print("Making tar.xz archive...")
+    print("WARNING: It's going to take a long time.")
+    make_tarxz("{}-{}-{}.{}".format(dist_subdir[0], date, timestr, "tar.xz"), exe_dir)
+    finish_time = time.time()
+    print_time_diff(finish=finish_time, start=generate_finish, taskstr="Compressing")
 
 
 if __name__ == '__main__':
     main()
-    # print()
