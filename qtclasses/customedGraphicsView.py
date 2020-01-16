@@ -47,7 +47,7 @@ class CircleDetector(QObject):
         mat = self.convertToMat(pixmapItem)
         gray = cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY)
         circle1 = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 3000, param1=100, param2=30, minRadius=10,
-                                   maxRadius=150)
+                                   maxRadius=60)
         if circle1 is not None:
             circles = circle1[0, :, :]
             circles = np.uint16(np.around(circles))
@@ -370,7 +370,6 @@ class customedGraphicsView(QGraphicsView):
         self.showDot = True
         self.showLine = True
         self.showRect = False
-        self.anglePoints = []
         self.lastTask = self.drawAngleDynamic
         self.setPen()
         self.setTemporaryCursor(Qt.CrossCursor)
@@ -504,7 +503,6 @@ class customedGraphicsView(QGraphicsView):
                     # self.scale(last_scale, last_scale)
         if pointB.x() < 0 or pointB.x() > self.width() or pointB.y() < 0 or pointB.y() > self.height():
             print("Warning: point ({},{}) exceeds boundary.".format(pointB.x(), pointB.y()))
-        scene = self.scene()
         x1 = pointA.x()
         y1 = pointA.y()
         if boundaryRestrict:
@@ -516,8 +514,17 @@ class customedGraphicsView(QGraphicsView):
 
         line = QLineF(x1, y1, x2, y2)
         if appendList:
+            self.fitview(self.lastPic, cleartask=False, renew=True)
             self.lineList.append(line)
-        scene.addLine(line, pen=self.linePen)
+            scene = self.scene()
+            for i in self.lineList:
+                scene.addLine(i, pen=self.linePen)
+        else:
+            self.fitview(self.lastPic, cleartask=False, renew=True)
+            scene = self.scene()
+            for i in self.lineList:
+                scene.addLine(i, pen=self.linePen)
+            scene.addLine(line, pen=self.linePen)
         if len(self.areaPoints)>1:
             for i in range(len(self.areaPoints)-1):
                 line = QLineF(self.areaPoints[i].x(), self.areaPoints[i].y(), self.areaPoints[i+1].x(), self.areaPoints[i+1].y())
@@ -528,9 +535,8 @@ class customedGraphicsView(QGraphicsView):
                               self.curvePoints[i + 1].y())
                 scene.addLine(line, pen=self.linePen)
 
-        self.setScene(scene)
-        if storephase:
-            self.captureLastPhase = self.scene().items()
+        # self.setScene(scene)
+
 
     def restrictedPoint(self, point):
         x = min(max(point.x(), 0), self.width())
@@ -604,6 +610,7 @@ class customedGraphicsView(QGraphicsView):
         elif self.lastTask == self.drawAngleDynamic:
             self.dynamicLineStartPoint = None
             self.captureLastPhase = None
+            self.anglePoints = []
             self.lastTask()
         elif self.lastTask == self.measureHLength:
             self.mountHPoint = None
@@ -630,7 +637,7 @@ class customedGraphicsView(QGraphicsView):
         if self.lastTask is not None:
             self.lastTask()
 
-    def restore(self):
+    def restore(self, clearReference=True):
         self.selectedPointList = []
         self.lineList = []
         if self.lastPic is not None:
@@ -643,8 +650,11 @@ class customedGraphicsView(QGraphicsView):
         self.dynamicLineSelection = False
         self.dynamicLineStartPoint = None
         self.cvmat = None
-        self.referencePixels = None
-        self.referenceReady = False
+        if clearReference:
+            self.referencePixels = None
+            self.referenceReady = False
+            self.actual = 1
+
         self.currentCursor = Qt.ArrowCursor
         self.tempCursor = None
         self.applyStoredCursor()
@@ -655,7 +665,6 @@ class customedGraphicsView(QGraphicsView):
         self.result = None
 
         #reprent the actual length of the every pixs
-        self.actual=1
 
         # nose
         self.isNose=-1
@@ -813,8 +822,8 @@ class customedGraphicsView(QGraphicsView):
                                 dy=self.nosePoints[0].y()-self.nosePoints[1].y()
                                 ans=dx*dx+dy*dy
                                 ans=math.sqrt(ans)
-                                ans=ans*self.actual
-                                # ans = ans * 1.0 / self.referencePixels * self.referenceTrueLength
+                                # ans=ans*self.actual
+                                ans = ans * 1.0 / self.referencePixels * self.referenceTrueLength
 
                                 middle_point = QPoint(0.5 * self.nosePoints[1].x() + 0.5 * self.nosePoints[0].x()+20,
                                                       0.5 * self.nosePoints[1].y() + 0.5 * self.nosePoints[0].y()-50)
@@ -964,12 +973,12 @@ class customedGraphicsView(QGraphicsView):
                 if self.areaDone==False and self.isArea>-1:
                     self.areaDone=True
                     num=len(self.areaPoints)
-                    self.paintLine(self.areaPoints[num-2],self.areaPoints[num-1],clear=True,storephase=True)
+                    self.paintLine(self.areaPoints[0],self.areaPoints[num-1],clear=True,storephase=True)
                     return
                 if self.curveDone==False and self.isCurve>-1:
                     self.curveDone=True
                     num=len(self.curvePoints)
-                    self.paintLine(self.curvePoints[num-2],self.curvePoints[num-1],clear=True,storephase=True)
+                    self.paintLine(self.curvePoints[0],self.curvePoints[num-1],clear=True,storephase=True)
                     return
                 self.revert()
                 self.sigRightClicked.emit()
@@ -997,22 +1006,22 @@ class customedGraphicsView(QGraphicsView):
 
             if len(self.curvePoints)>0 and self.curveDone==False:
                 num = len(self.curvePoints)
-                self.paintLine(self.curvePoints[num - 1], self.mapToScene(QMouseEvent.pos()), clear=True)
+                self.paintLine(self.curvePoints[num - 1], self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
 
             if len(self.areaPoints)>0 and self.areaDone==False:
                 num=len(self.areaPoints)
-                self.paintLine(self.areaPoints[num-1],self.mapToScene(QMouseEvent.pos()),clear=True)
+                self.paintLine(self.areaPoints[num-1],self.mapToScene(QMouseEvent.pos()),clear=True, appendList=False)
             if len(self.nosePoints)==1 and self.dynamicLineStartPoint is not None:
-                self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True)
+                self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
             if len(self.dotLine)==1 and self.dynamicLineStartPoint is not None:
-                self.paintLine(self.dynamicLineStartPoint,self.mapToScene(QMouseEvent.pos()),clear=True)
+                self.paintLine(self.dynamicLineStartPoint,self.mapToScene(QMouseEvent.pos()),clear=True, appendList=False)
 
             if self.dynamicRectSelection and self.dynamicRectStartPoint is not None and self.pressed:
                 self.paintRect(self.dynamicRectStartPoint, self.mapToScene(QMouseEvent.pos()))
             elif self.dynamicLineSelection and self.dynamicLineStartPoint is not None:
-                self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True)
+                self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
             elif -1 < self.dynamicAngleSelectionPhase <= 2 and self.dynamicLineStartPoint is not None:
-                self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True)
+                self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
             if self.lastMousePos is not None and self.pressed and not self.dynamicRectSelection:
                 mouseDelta = self.mapToScene(QMouseEvent.pos()) - self.mapToScene(self.lastMousePos)
                 self.moveScene(mouseDelta)
