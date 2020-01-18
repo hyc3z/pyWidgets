@@ -146,13 +146,14 @@ QRadioButton
     outline: none;
     color: #eff0f1;
     margin-bottom: 0.2ex;
+    font: 25px;
+    padding: 0.5ex;
 }
 
 QRadioButton:disabled
 {
     color: #76797c;
 }
-
 QRadioButton::indicator:unchecked,
 QRadioButton::indicator:unchecked:focus
 {
@@ -340,11 +341,20 @@ QLineEdit
     background-color: #232629;
     padding: 0.5ex;
     border-style: solid;
-    border: 0.1ex solid #76797c;
+    border: 0px solid #3daee9;
     border-radius: 4px;
     color: #eff0f1;
 }
 
+QLineEdit:focus
+{
+    background-color: #232629;
+    padding: 0.5ex;
+    border-style: solid;
+    border: 0px solid #3daee9;
+    border-radius: 4px;
+    color: #eff0f1;
+}
 QGroupBox
 {
     border: 0.1ex solid #76797c;
@@ -622,7 +632,7 @@ QToolBar::separator:vertical
 QPushButton
 {
     color: #eff0f1;
-    background-color: #3b4045;
+    background-color: qlineargradient(x1: 0.5, y1: 0 x2: 0.5, y2: 1, stop: 0 #3eeff9, stop: 1 #0000ff);
     border-width: 0.1ex;
     border-color: #76797c;
     border-style: solid;
@@ -652,7 +662,7 @@ QPushButton:focus
 
 QPushButton:pressed
 {
-    background-color: #31363b;
+    background-color: qradialgradient(spread:pad, cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5, stop:0 #0000ff, stop:1 #3daee9);
     padding-top: -1.5ex;
     padding-bottom: -1.7ex;
 }
@@ -675,9 +685,9 @@ QPushButton:checked
 
 QPushButton:hover
 {
-    background-color: #454a4f;
+    background-color: #3ecdd9;
     border: 0.1ex solid #3daee9;
-    color: #eff0f1;
+    color: #0000FF;
 }
 
 QPushButton:checked:hover
@@ -1173,23 +1183,42 @@ QDockWidget::close-button:pressed
 
 QTreeWidget{
     font-family: "Simsun";
+    font-size:18px;
+    border-radius: 8px;
+    border: 0px solid #3daee9;
+    text-align: center;
+}
+
+QTreeWidget:hover{
+    font-family: "Simsun";
     font-size:20px;
     border-radius: 8px;
+    border: 0px solid #3daee9;
+}
+
+QTreeWidget:focus{
+    font-family: "Simsun";
+    font-size:20px;
+    border-radius: 8px;
+    border: 0px solid #3daee9;
 }
 QListView
 {
     border: 0ex solid #76797c;
     background-color: #232629;
     size-hint:50;
+
 }
 
 QTreeWidget::item{
-    background-color: qlineargradient(x1: 0.5, y1: 0 x2: 0.5, y2: 1, stop: 0 #3eeff9, stop: 1 #0000ff);
-    height:40px;
-    border-radius: 1px;
+    background-color: qlineargradient(x1: 0.5, y1: 0 x2: 0.5, y2: 1, stop: 0 #3eeff9, stop: 0.9 #0000ff);
+    height:34px;
+    border-radius: 6px;
+    padding: 1.5ex;
+
 }
 QTreeWidget::item::hover{
-    background-color: #3daee9;
+    background-color: qradialgradient(spread:pad, cx:0.5, cy:0.5, radius:1, fx:0.5, fy:0.5, stop:0 #ffffff, stop:0.6 #3daee9, stop:1 #0000ff);
     color: #eff0f1;
     outline: 0;
     padding: 0.3ex;
@@ -1236,8 +1265,8 @@ QTableView::item:!selected:hover,
 QListView::item:!selected:hover,
 QTreeWidget::item:!selected:hover
 {
-    background-color: #3daee9;
-    color: #eff0f1;
+    background-color: #3edee9;
+    color: #0000ff;
     outline: 0;
     padding: 0.3ex;
 }
@@ -1511,7 +1540,7 @@ QStatusBar::item
 QFrame[height="3"],
 QFrame[width="3"]
 {
-    background-color: #76797c;
+    background-color: #3eeff9;
 }
 
 
