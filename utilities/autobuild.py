@@ -25,6 +25,7 @@ def get_datetime_string_now():
     timestr = "{0:02d}{1:02d}{2:02d}".format(timeobj.hour, timeobj.minute, timeobj.second)
     return timestr
 
+
 def main():
     start_time = time.time()
     cur_dir = "."
@@ -32,6 +33,7 @@ def main():
     work_dir = "./build"
     dist_dir = "./dist"
     icon_file = "icon.ico"
+    src_dir = "./src"
     copy_dir = [
         "./dark",
         "./light",
@@ -49,15 +51,48 @@ def main():
         "database.db",
         "icon.ico"
     ]
-    options = "-w --icon={} ".format(icon_file)
+    src_file = [
+        "camera.py",
+        "camera_thread.py",
+        "customedGraphicsView.py",
+        "dark.qss",
+        "database_controller.py",
+        "database_macros.py",
+        "dialog_exit.py",
+        "dict2py.py",
+        "fetch_thread.py",
+        "helptable_data.py",
+        "levelfour_macros.py",
+        "icon.ico",
+        "login.py",
+        "logo_login.png",
+        "logo_login_cropped.png",
+        "logo_window.png",
+        "logo_yxy_square.png",
+        "logo_zjdxyxy.png",
+        "main.py",
+        "mainwindow.py",
+        "modifiedTableWidget.py",
+        "pwd_util.py",
+        "time_thread.py",
+        "tree_dict.py",
+        "tree_dict_to_qtreewidgetitems.py",
+        "ui_login.py",
+        "ui_mainwindow_4.py",
+        "ui_popup_noicon.py",
+    ]
     if os.path.exists(work_dir):
         if os.path.isdir(work_dir):
             shutil.rmtree(work_dir)
     if os.path.exists(dist_dir):
         if os.path.isdir(dist_dir):
             shutil.rmtree(dist_dir)
+    if os.path.exists(src_dir):
+        if os.path.isdir(src_dir):
+            shutil.rmtree(src_dir)
     os.mkdir(work_dir)
     os.mkdir(dist_dir)
+    os.mkdir(src_dir)
     os.system("""pyinstaller "{}" --windowed --clean  --distpath="{}" -i {}  """.format(
             os.path.join(cur_dir, entrance_file),
             os.path.join(cur_dir, dist_dir),
@@ -81,16 +116,27 @@ def main():
                 os.remove(target_dir)
         shutil.copyfile(i, os.path.join(exe_dir, i))
     timestr = get_datetime_string_now()
+    for i in src_file:
+        target_dir = src_dir
+        shutil.copyfile(i, os.path.join(target_dir, i))
+    for i in copy_dir:
+        target_dir = src_dir
+        shutil.copytree(i, os.path.join(target_dir, i))
     # shutil.make_archive("{}-{}-{}".format(dist_subdir[0],date,timestr), "zip", exe_dir)
     now = datetime.datetime.now()
     date = now.date()
     generate_finish = time.time()
     print_time_diff(finish=generate_finish, start=start_time, taskstr="Generating")
-    print("Making tar.xz archive...")
+    print("Making release tar.xz archive...")
     print("WARNING: It's going to take a long time.")
     make_tarxz("{}-{}-{}.{}".format(dist_subdir[0], date, timestr, "tar.xz"), exe_dir)
     finish_time = time.time()
-    print_time_diff(finish=finish_time, start=generate_finish, taskstr="Compressing")
+    print_time_diff(finish=finish_time, start=generate_finish, taskstr="Compressing release")
+    print("Making source tar.xz archive...")
+    print("WARNING: It's going to take a long time.")
+    make_tarxz("{}-{}-{}.{}".format("source", date, timestr, "tar.xz"), src_dir)
+    finish_time_2 = time.time()
+    print_time_diff(finish=finish_time_2, start=finish_time, taskstr="Compressing source")
 
 
 if __name__ == '__main__':
