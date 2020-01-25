@@ -6,9 +6,12 @@ def dumpDict2Py(_dict:dict, filename, dictname):
     indent_str = ' '*4
     beautified_str_dict = ""
     last_return_buffer = ""
+    within_text = False
     for i in str_dict:
         return_buffer = ""
         indent = ""
+        if i == "'":
+            within_text = not within_text
         if i == '{':
             indent_level += 1
             return_buffer += "\n"
@@ -16,7 +19,8 @@ def dumpDict2Py(_dict:dict, filename, dictname):
             indent_level -= 1
             return_buffer += "\n"
         if i == ',':
-            return_buffer += "\n"
+            if not within_text:
+                return_buffer += "\n"
         if last_return_buffer != "":
             indent = indent_str*indent_level
         last_return_buffer = return_buffer
