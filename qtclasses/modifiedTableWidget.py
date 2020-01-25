@@ -1,13 +1,14 @@
 from PyQt5 import QtWidgets
 from PyQt5 import QtGui
+from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QColor, QFont
 from PyQt5.QtWidgets import QProxyStyle, QTableWidget, QAbstractItemView, QHeaderView
 
 
-class Table(QtWidgets.QTableWidget):
+class modifiedTableWidget(QtWidgets.QTableWidget):
 
     def __init__(self, parent=None):
-        super(Table, self).__init__(parent)
+        super(modifiedTableWidget, self).__init__(parent)
         self.setMouseTracking(True)
         self.lastRowBkColor = QColor(0x00, 0xff, 0x00, 0x00)
         self.previousColorRow = -1
@@ -21,6 +22,15 @@ class Table(QtWidgets.QTableWidget):
         # self.setSizeAdjustPolicy(
         #     QtWidgets.QAbstractScrollArea.AdjustToContents)
         self.cellEntered.connect(self.mouseOnRow)
+        self.horizontalHeader().sectionClicked.connect(self.sort)
+        self.asc=False
+
+    def sort(self, index:int):
+        if self.asc:
+            self.sortItems(index, Qt.AscendingOrder)
+        else:
+            self.sortItems(index, Qt.DescendingOrder)
+        self.asc = not self.asc
 
     def leaveEvent(self, event):
         item = self.item(self.previousColorRow, 0)
