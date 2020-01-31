@@ -164,6 +164,7 @@ class customedGraphicsView(QGraphicsView):
         # connect(this, &Controller::operate, worker, &Worker::doWork)
         # connect(worker, &Worker::resultReady, this, &Controller::handleResults);
         self.workerThread.start()
+        self.setPen()
 
     def setReferencePixels(self, pixels:float):
         print("Length get!")
@@ -191,7 +192,6 @@ class customedGraphicsView(QGraphicsView):
         if self.referencePixels is None:
             self.detectCircle()
             # self.referenceReady = True
-        self.setPen()
         self.setTemporaryCursor(Qt.CrossCursor)
 
 
@@ -214,7 +214,6 @@ class customedGraphicsView(QGraphicsView):
             self.detectCircle()
             # self.actual = self.referenceTrueLength * 1.0 / self.referencePixels
             # self.referenceReady = True
-        self.setPen()
         self.setTemporaryCursor(Qt.CrossCursor)
 
     def captureToQImage(self):
@@ -236,7 +235,6 @@ class customedGraphicsView(QGraphicsView):
         if self.referencePixels is None:
             self.detectCircle()
             # self.actual=self.referenceTrueLength*1.0/self.referencePixels
-        self.setPen()
         self.setTemporaryCursor(Qt.CrossCursor)
    
     def noseLength(self):
@@ -254,17 +252,19 @@ class customedGraphicsView(QGraphicsView):
     def drawNoseLength(self):
         self.showDot=True
         self.showLine=True
-
-        self.setPen()
         self.setTemporaryCursor(Qt.CrossCursor)
 
-    def measureHLength(self):
+    def measureHLength(self, revert=False):
+        if not revert:
+            self.setPen(lineColor=Qt.red, dotColor=Qt.blue)
         self.lastTask = self.measureHLength
         if self.referencePixels is None:
             self.detectCircle()
         self.setTemporaryCursor(Qt.CrossCursor)
 
-    def measureVLength(self):
+    def measureVLength(self,  revert=False):
+        if not revert:
+            self.setPen(lineColor=Qt.red, dotColor=Qt.blue)
         self.lastTask = self.measureVLength
         if self.referencePixels is None:
            self.detectCircle()
@@ -344,7 +344,6 @@ class customedGraphicsView(QGraphicsView):
         self.showDot = False
         self.showLine = False
         self.showRect = True
-        self.setPen()
         self.setTemporaryCursor(Qt.CrossCursor)
         self.dynamicRectSelection = True
         self.lastTask = self.selectAreaDynamic
@@ -362,7 +361,6 @@ class customedGraphicsView(QGraphicsView):
         self.showLine = True
         self.showRect = False
         self.lastTask = self.drawLineDynamic
-        self.setPen()
         self.setTemporaryCursor(Qt.CrossCursor)
         self.dynamicLineSelection = True
 
@@ -371,7 +369,6 @@ class customedGraphicsView(QGraphicsView):
         self.showLine = True
         self.showRect = False
         self.lastTask = self.drawAngleDynamic
-        self.setPen()
         self.setTemporaryCursor(Qt.CrossCursor)
         self.dynamicAngleSelectionPhase = 0
 
@@ -451,7 +448,7 @@ class customedGraphicsView(QGraphicsView):
         multi = self.getMultipier()
         line_size = int(40 / multi) + 1
         point_size = int(5/multi) + 1
-        self.setPen(lineColor=Qt.red, dotColor=Qt.blue)
+
         scene.addRect(point.x() - int((point_size-1)/2), point.y() - int((point_size-1)/2), point_size, point_size, pen=self.dotPen)
         scene.addLine(point.x(), point.y() - line_size, point.x(), point.y() - int((point_size-1)/2), pen=self.linePen)
         scene.addLine(point.x(), point.y() + int((point_size-1)/2), point.x(), point.y() + line_size, pen=self.linePen)
@@ -462,7 +459,6 @@ class customedGraphicsView(QGraphicsView):
         multi = self.getMultipier()
         line_size = int(40 / multi) + 1
         point_size = int(5 / multi) + 1
-        self.setPen(lineColor=Qt.red, dotColor=Qt.red)
         scene.addRect(point.x() - int((point_size-1)/2), point.y() - int((point_size-1)/2), point_size, point_size, pen=self.dotPen)
         scene.addLine(point.x() - line_size, point.y(), point.x() - int((point_size-1)/2), point.y(), pen=self.linePen)
         scene.addLine(point.x() + int((point_size-1)/2), point.y(), point.x() + line_size, point.y(), pen=self.linePen)
@@ -584,12 +580,34 @@ class customedGraphicsView(QGraphicsView):
     def paintText(self, text, point):
         scene = self.scene()
         # text = str(round(line.length(), 2))
-        txtItem = QGraphicsTextItem(text)
-        txtItem.setPos(point)
-        txtItem.setDefaultTextColor(self.textPen.color())
         multi = self.getMultipier()
+        pixel_size = int(24 / multi) + 1
+        txtItem = QGraphicsTextItem(text)
+        x = point.x()
+        y = point.y()
+        if len(self.anglePoints) > 0:
+            pt = self.anglePoints[0]
+            min_x = pt.x()
+            min_y = pt.y()
+            max_x = pt.x()
+            max_y = pt.y()
+            for i in self.anglePoints:
+                min_x = min(i.x(), min_x)
+                max_x = max(i.x(), max_x)
+                min_y = min(i.y(), min_y)
+                max_y = max(i.y(), max_y)
+            if min_y >= point.y():
+                y -= pixel_size*4
+            elif max_y <= point.y():
+                y += pixel_size
+            if min_x >= point.x():
+                x -= pixel_size*6
+            elif max_x >= point.x():
+                x += pixel_size
+        txtItem.setPos(x, y)
+        txtItem.setDefaultTextColor(self.textPen.color())
         font = QFont()
-        font.setPixelSize(int(24 / multi) + 1)
+        font.setPixelSize(pixel_size)
         txtItem.setFont(font)
         scene.addItem(txtItem)
         self.setScene(scene)
@@ -614,10 +632,10 @@ class customedGraphicsView(QGraphicsView):
             self.lastTask()
         elif self.lastTask == self.measureHLength:
             self.mountHPoint = None
-            self.lastTask()
+            self.lastTask(True)
         elif self.lastTask == self.measureVLength:
             self.mountVPoint = None
-            self.lastTask()
+            self.lastTask(True)
         elif self.lastTask==self.noseLength:
             self.dynamicLineStartPoint=None
             self.nosePoints = []
@@ -713,8 +731,8 @@ class customedGraphicsView(QGraphicsView):
         self.setTemporaryCursor(Qt.CrossCursor)
         self.selectedPoint = 0
         self.maximumPointCount = pointCount
-        self.setPen(dotColor=dotColor, lineColor=lineColor, rectColor=rectColor, dotPenWidth=dotPenWidth,
-                    linePenWidth=linePenWidth, rectPenWidth=rectPenWidth)
+        # self.setPen(dotColor=dotColor, lineColor=lineColor, rectColor=rectColor, dotPenWidth=dotPenWidth,
+        #             linePenWidth=linePenWidth, rectPenWidth=rectPenWidth)
 
     def setPen(self, dotColor=Qt.blue, lineColor=Qt.blue, rectColor=Qt.blue, textColor=Qt.blue,
                dotPenWidth=1, linePenWidth=2, rectPenWidth=2, textPenWidth=1):
@@ -726,6 +744,30 @@ class customedGraphicsView(QGraphicsView):
         self.linePen.setWidth(linePenWidth)
         self.rectPen.setWidth(rectPenWidth)
         self.textPen.setWidth(textPenWidth)
+
+    def getDotColor(self):
+        return self.dotPen.color()
+
+    def setDotColor(self, color):
+        self.dotPen.setColor(color)
+
+    def getLineColor(self):
+        return self.linePen.color()
+
+    def setLineColor(self, color):
+        self.linePen.setColor(color)
+
+    def getRectColor(self):
+        return self.rectPen.color()
+
+    def setRectColor(self, color):
+        self.rectPen.setColor(color)
+
+    def getTextColor(self):
+        return self.textPen.color()
+
+    def setTextColor(self, color):
+        self.textPen.setColor(color)
 
     def getMultipier(self):
         return round(self.transform().m11(), 2)
