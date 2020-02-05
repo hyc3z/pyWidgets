@@ -7,6 +7,7 @@ import cv2
 # from cv2 import cvtColor, HoughCircles, circle, rectangle, COLOR_BGR2BGRA
 import numpy as np
 import numpy
+from customedQGraphicsLineItem import CustomedQGraphicsLineItem
 
 class CircleDetector(QObject):
 
@@ -91,6 +92,7 @@ class customedGraphicsView(QGraphicsView):
     def __init__(self, parent=None):
         super(QGraphicsView, self).__init__(parent)
         self.setMouseTracking(True)
+        self.setRenderHint(QPainter.HighQualityAntialiasing)
         self.lastMousePos = None
         self.cropped_pixmap = None
         self.pressed = False
@@ -102,6 +104,7 @@ class customedGraphicsView(QGraphicsView):
         self.selectedPoint = -1
         self.selectedPointList = []
         self.lineList = []
+        self.lineItem = None
         self.currentCursor = Qt.ArrowCursor
         self.tempCursor = None
         self.dotPen = QPen()
@@ -255,16 +258,16 @@ class customedGraphicsView(QGraphicsView):
         self.setTemporaryCursor(Qt.CrossCursor)
 
     def measureHLength(self, revert=False):
-        if not revert:
-            self.setPen(lineColor=Qt.red, dotColor=Qt.blue)
+        # if not revert:
+        #     self.setPen(lineColor=Qt.red, dotColor=Qt.blue)
         self.lastTask = self.measureHLength
         if self.referencePixels is None:
             self.detectCircle()
         self.setTemporaryCursor(Qt.CrossCursor)
 
     def measureVLength(self,  revert=False):
-        if not revert:
-            self.setPen(lineColor=Qt.red, dotColor=Qt.blue)
+        # if not revert:
+        #     self.setPen(lineColor=Qt.red, dotColor=Qt.blue)
         self.lastTask = self.measureVLength
         if self.referencePixels is None:
            self.detectCircle()
@@ -508,19 +511,34 @@ class customedGraphicsView(QGraphicsView):
             x2 = pointB.x()
             y2 = pointB.y()
 
+
         line = QLineF(x1, y1, x2, y2)
         if appendList:
             self.fitview(self.lastPic, cleartask=False, renew=True)
             self.lineList.append(line)
+            # self.lineList.append(lineItem)
             scene = self.scene()
             for i in self.lineList:
-                scene.addLine(i, pen=self.linePen)
+                # scene.addLine(i, pen=self.linePen)
+                self.lineItem = CustomedQGraphicsLineItem()
+                self.lineItem.setLine(i)
+                self.lineItem.setPen(self.linePen)
+                scene.addItem(self.lineItem)
         else:
-            self.fitview(self.lastPic, cleartask=False, renew=True)
-            scene = self.scene()
-            for i in self.lineList:
-                scene.addLine(i, pen=self.linePen)
-            scene.addLine(line, pen=self.linePen)
+
+                self.fitview(self.lastPic, cleartask=False, renew=True)
+                scene = self.scene()
+                for i in self.lineList:
+                    # scene.addLine(i, pen=self.linePen)
+                    self.lineItem = CustomedQGraphicsLineItem()
+                    self.lineItem.setLine(i)
+                    self.lineItem.setPen(self.linePen)
+                    scene.addItem(self.lineItem)
+                # scene.addLine(line, pen=self.linePen)
+                self.lineItem = CustomedQGraphicsLineItem()
+                self.lineItem.setLine(line)
+                self.lineItem.setPen(self.linePen)
+                scene.addItem(self.lineItem)
         if len(self.areaPoints)>1:
             for i in range(len(self.areaPoints)-1):
                 line = QLineF(self.areaPoints[i].x(), self.areaPoints[i].y(), self.areaPoints[i+1].x(), self.areaPoints[i+1].y())
@@ -615,6 +633,7 @@ class customedGraphicsView(QGraphicsView):
     def revert(self):
         self.selectedPointList = []
         self.lineList = []
+        self.lineItem = None
         self.finishedTask = False
         if self.lastPic is not None:
             self.fitview(self.lastPic, cleartask=False, renew=True)
@@ -658,6 +677,8 @@ class customedGraphicsView(QGraphicsView):
     def restore(self, clearReference=True):
         self.selectedPointList = []
         self.lineList = []
+        self.lineItem = None
+
         if self.lastPic is not None:
             self.fitview(self.lastPic, cleartask=True, renew=True)
         self.withinTask = False
@@ -1068,6 +1089,7 @@ class customedGraphicsView(QGraphicsView):
                 mouseDelta = self.mapToScene(QMouseEvent.pos()) - self.mapToScene(self.lastMousePos)
                 self.moveScene(mouseDelta)
                 self.lastMousePos = QMouseEvent.pos()
+            QGraphicsView.mouseMoveEvent(self,QMouseEvent)
 
     def moveScene(self, delta: QPointF):
         delta *= self.getMultipier()
