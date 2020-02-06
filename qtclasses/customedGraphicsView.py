@@ -56,7 +56,7 @@ class CircleDetector(QObject):
                 cv2.circle(mat, (i[0], i[1]), i[2], (255, 0, 0), 2)
                 cv2.circle(mat, (i[0], i[1]), 2, (255, 0, 255), 10)
                 cv2.rectangle(mat, (i[0] - i[2], i[1] + i[2]), (i[0] + i[2], i[1] - i[2]), (255, 255, 0), 5)
-                print('半径为', i[2])
+                # print('半径为', i[2])
                 Length = i[2] * 2
                 # self.sigPreparingFinished.emit()
                 # 平方毫米
@@ -295,7 +295,7 @@ class customedGraphicsView(QGraphicsView):
             angle = 360 - angle
         print(angle)
         if display:
-            self.result = "角度：{} 度".format(str(round(angle, roundnum)))
+            self.result = "角度：{}°".format(str(round(angle, roundnum)))
             self.paintText(str(round(angle, roundnum)), point=self.mapToScene(pointB))
         return angle
 
@@ -824,7 +824,8 @@ class customedGraphicsView(QGraphicsView):
                         if self.isArea!=-1:
                             if self.areaDone:
                                 ans = self.calcArea(self.areaPoints)
-                                ans=ans* self.actualArea
+
+                                ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
                                 middle_point = QPoint(0.5 * self.areaPoints[1].x() + 0.5 * self.areaPoints[0].x() + 20,
                                                       0.5 * self.areaPoints[1].y() + 0.5 * self.areaPoints[0].y() - 50)
                                 self.result = "距离：{} mm".format(str(round(float(ans), 2)))
@@ -1037,11 +1038,34 @@ class customedGraphicsView(QGraphicsView):
                     self.areaDone=True
                     num=len(self.areaPoints)
                     self.paintLine(self.areaPoints[0],self.areaPoints[num-1],clear=True,storephase=True)
+                    ans = self.calcArea(self.areaPoints)
+
+                    ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
+                    middle_point = QPoint(0.5 * self.areaPoints[1].x() + 0.5 * self.areaPoints[0].x() + 20,
+                                          0.5 * self.areaPoints[1].y() + 0.5 * self.areaPoints[0].y() - 50)
+                    self.result = "面积：{} mm²".format(str(round(float(ans), 2)))
+                    self.paintText(str(round(float(ans), 2)), middle_point)
+                    self.areaPoints = []
+                    self.isArea = -1
+                    self.areaDone = False
+                    self.unsetTemporaryCursor()
+                    self.sigTaskFinished.emit()
                     return
                 if self.curveDone==False and self.isCurve>-1:
                     self.curveDone=True
                     num=len(self.curvePoints)
                     self.paintLine(self.curvePoints[0],self.curvePoints[num-1],clear=True,storephase=True)
+                    ans = self.calcCurveLength(self.curvePoints)
+                    ans = ans * self.actual
+                    middle_point = QPoint(0.5 * self.curvePoints[1].x() + 0.5 * self.curvePoints[0].x() + 20,
+                                          0.5 * self.curvePoints[1].y() + 0.5 * self.curvePoints[0].y() - 50)
+                    self.result = "距离：{} mm".format(str(round(float(ans), 2)))
+                    self.paintText(str(round(float(ans), 2)), middle_point)
+                    self.curvePoints = []
+                    self.isCurve = -1
+                    self.curveDone = False
+                    self.unsetTemporaryCursor()
+                    self.sigTaskFinished.emit()
                     return
                 self.revert()
                 self.sigRightClicked.emit()
