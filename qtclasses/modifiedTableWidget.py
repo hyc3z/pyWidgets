@@ -57,4 +57,3 @@ class modifiedTableWidget(QtWidgets.QTableWidget):
             item = self.item(row, i)
             if isinstance(item, QTableWidgetItem):
                 item.setBackground(color)
-

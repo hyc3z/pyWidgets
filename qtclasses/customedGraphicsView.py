@@ -8,6 +8,7 @@ import cv2
 import numpy as np
 import numpy
 from customedQGraphicsLineItem import CustomedQGraphicsLineItem
+from input_dialog import DialogInput
 
 class CircleDetector(QObject):
 
@@ -47,8 +48,8 @@ class CircleDetector(QObject):
         # self.sigPreparing.emit()
         mat = self.convertToMat(pixmapItem)
         gray = cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY)
-        circle1 = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 3000, param1=100, param2=30, minRadius=10,
-                                   maxRadius=60)
+        circle1 = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 3000, param1=100, param2=30, minRadius=0,
+                                   maxRadius=300)
         if circle1 is not None:
             circles = circle1[0, :, :]
             circles = np.uint16(np.around(circles))
@@ -154,6 +155,11 @@ class customedGraphicsView(QGraphicsView):
         self.curvePoints=[]
         self.curveDone=False
 
+        #测体积
+        self.isVol=-1
+        self.volPoint=[]
+        self.volDone=False
+
         #测距离多线程
         self.workerThread = QThread()
         self.worker = CircleDetector()
@@ -169,6 +175,38 @@ class customedGraphicsView(QGraphicsView):
         self.workerThread.start()
         self.setPen()
 
+    def inputDepth(self):
+        dialog = DialogInput(self)
+        err_range = "输入值有误"
+        err_value = "输入值有误"
+        err_noInput = "未输入数值"
+        dialog.setStyleSheet(
+            "QPushButton {"
+            " font: bold 24px;"
+            "padding-left: 3ex;"
+            "padding-right: 3ex;"
+            "padding-top: 1ex;"
+            "padding-bottom: 1ex;"
+            "margin-left:0px;"
+            "}"
+            "QLabel { font:24px}"
+            "QLineEdit { font:24px}"
+        )
+        errstr = " "
+        while len(errstr) > 0:
+            val = dialog.exec()
+            errstr = ""
+            try:
+                valnum = float(val)
+                if valnum < 0:
+                    errstr += "\n{}".format(err_range)
+            except ValueError:
+                errstr += "\n{}".format(err_value)
+            except TypeError:
+                errstr += "\n{}".format(err_noInput)
+            if len(errstr) > 0:
+                self.inputError(errstr)
+        return val
     def setReferencePixels(self, pixels:float):
         print("Length get!")
         self.referencePixels = pixels
@@ -177,6 +215,17 @@ class customedGraphicsView(QGraphicsView):
     def setReferencePixelArea(self, area:float):
         print("Area get!")
         self.referencePixelsArea = area
+
+    def measureVol(self):
+        self.isVol=0
+        self.showDot = True
+        self.showLine = True
+        self.lastTask = self.measureVol
+        if self.referencePixels is None:
+            self.detectCircle()
+        self.setTemporaryCursor(Qt.CrossCursor)
+
+
 
     def calcCurveLength(self,cpoint):
         num=len(cpoint)
@@ -239,7 +288,7 @@ class customedGraphicsView(QGraphicsView):
             self.detectCircle()
             # self.actual=self.referenceTrueLength*1.0/self.referencePixels
         self.setTemporaryCursor(Qt.CrossCursor)
-   
+
     def noseLength(self):
         self.isNose=0
         # self.referenceReady=True
@@ -483,7 +532,7 @@ class customedGraphicsView(QGraphicsView):
             self.setScene(scene)
             self.curScale = self.getMultipier()
 
-    def paintLine(self, pointA, pointB, appendList=True, clear=False, storephase=False, boundaryRestrict=True, assertPt=True):
+    def paintLine(self, pointA, pointB, appendList=True, clear=False, storephase=False, boundaryRestrict=False, assertPt=True):
         if assertPt:
             if not (self.assertPoint(pointA) and self.assertPoint(pointB)):
                 return
@@ -539,6 +588,11 @@ class customedGraphicsView(QGraphicsView):
                 self.lineItem.setLine(line)
                 self.lineItem.setPen(self.linePen)
                 scene.addItem(self.lineItem)
+        if len(self.volPoint)>1:
+            for i in range(len(self.volPoint)-1):
+                line = QLineF(self.volPoint[i].x(), self.volPoint[i].y(), self.volPoint[i+1].x(), self.volPoint[i+1].y())
+                scene.addLine(line,pen=self.linePen)
+
         if len(self.areaPoints)>1:
             for i in range(len(self.areaPoints)-1):
                 line = QLineF(self.areaPoints[i].x(), self.areaPoints[i].y(), self.areaPoints[i+1].x(), self.areaPoints[i+1].y())
@@ -718,6 +772,9 @@ class customedGraphicsView(QGraphicsView):
         self.isCurve=-1
         self.curvePoints=[]
 
+        self.isVol=-1
+        self.volPoint=[]
+
 
     def autoFit(self):
         if self.lastPic is not None:
@@ -817,6 +874,30 @@ class customedGraphicsView(QGraphicsView):
                         if self.dynamicRectStartPoint is None:
                             self.dynamicRectStartPoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
                             print("Rect anchor point selected.")
+                    elif self.lastTask==self.measureVol:
+                        if not self.referenceReady:
+                            return
+                        cursorPoint=self.restrictedPoint(QMouseEvent.pos())
+                        if self.isVol!=-1:
+                            if self.volDone:
+                                ans = self.calcArea(self.volPoint)
+
+                                ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
+                                middle_point = QPoint(0.5 * self.areaPoints[1].x() + 0.5 * self.areaPoints[0].x() + 20,
+                                                      0.5 * self.areaPoints[1].y() + 0.5 * self.areaPoints[0].y() - 50)
+                                self.result = "体积：{} mm³".format(str(round(float(ans), 2)))
+                                self.paintText(str(round(float(ans), 2)), middle_point)
+                                self.volPoint = []
+                                self.isVol = -1
+                                self.volDone=False
+                                self.unsetTemporaryCursor()
+                                self.sigTaskFinished.emit()
+                            else:
+                                self.isVol+=1
+                                self.volPoint.append(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
+                                num=len(self.volPoint)
+                                if num>1:
+                                    self.paintLine(self.volPoint[num-2],self.volPoint[num-1],clear=True,storephase=True)
                     elif self.lastTask==self.measureArea:
                         if not self.referenceReady:
                             return
@@ -828,7 +909,7 @@ class customedGraphicsView(QGraphicsView):
                                 ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
                                 middle_point = QPoint(0.5 * self.areaPoints[1].x() + 0.5 * self.areaPoints[0].x() + 20,
                                                       0.5 * self.areaPoints[1].y() + 0.5 * self.areaPoints[0].y() - 50)
-                                self.result = "距离：{} mm".format(str(round(float(ans), 2)))
+                                self.result = "面积：{} mm²".format(str(round(float(ans), 2)))
                                 self.paintText(str(round(float(ans), 2)), middle_point)
                                 self.areaPoints = []
                                 self.isArea = -1
@@ -1034,6 +1115,25 @@ class customedGraphicsView(QGraphicsView):
                             scenePos = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
                             self.storePoint(scenePos)
             elif QMouseEvent.button() == QtCore.Qt.RightButton:
+                if self.volDone==False and self.isVol>-1:
+                    self.volDone = True
+                    num = len(self.volPoint)
+                    self.paintLine(self.volPoint[0], self.volPoint[num - 1], clear=True, storephase=True)
+                    ans = self.calcArea(self.volPoint)
+
+                    ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
+                    middle_point = QPoint(0.5 * self.volPoint[1].x() + 0.5 * self.volPoint[0].x() + 20,
+                                          0.5 * self.volPoint[1].y() + 0.5 * self.volPoint[0].y() - 50)
+                    ans=1.0/3*ans*float(self.inputDepth())
+                    self.result = "体积：{} mm³".format(str(round(float(ans), 2)))
+                    self.paintText(str(round(float(ans), 2)), middle_point)
+                    self.volPoint = []
+                    self.isVol = -1
+                    self.volDone = False
+                    self.unsetTemporaryCursor()
+                    self.sigTaskFinished.emit()
+                    return
+
                 if self.areaDone==False and self.isArea>-1:
                     self.areaDone=True
                     num=len(self.areaPoints)
@@ -1054,7 +1154,8 @@ class customedGraphicsView(QGraphicsView):
                 if self.curveDone==False and self.isCurve>-1:
                     self.curveDone=True
                     num=len(self.curvePoints)
-                    self.paintLine(self.curvePoints[0],self.curvePoints[num-1],clear=True,storephase=True)
+                    # self.paintLine(self.curvePoints[0],self.curvePoints[num-1],clear=True,storephase=True)
+                    self.paintLine(self.curvePoints[0],self.curvePoints[1],clear=True,storephase=True)
                     ans = self.calcCurveLength(self.curvePoints)
                     ans = ans * self.actual
                     middle_point = QPoint(0.5 * self.curvePoints[1].x() + 0.5 * self.curvePoints[0].x() + 20,
@@ -1094,6 +1195,10 @@ class customedGraphicsView(QGraphicsView):
             if len(self.curvePoints)>0 and self.curveDone==False:
                 num = len(self.curvePoints)
                 self.paintLine(self.curvePoints[num - 1], self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
+            if len(self.volPoint)>0 and self.volDone==False:
+                num = len(self.volPoint)
+                self.paintLine(self.volPoint[num - 1], self.mapToScene(QMouseEvent.pos()), clear=True,
+                               appendList=False)
 
             if len(self.areaPoints)>0 and self.areaDone==False:
                 num=len(self.areaPoints)
