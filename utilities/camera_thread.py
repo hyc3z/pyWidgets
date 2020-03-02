@@ -8,13 +8,14 @@ from PyQt5.QtWidgets import QApplication, QGraphicsScene, QGraphicsPixmapItem
 import time
 from fetch_thread import FetchThread
 
+
 class CameraThread(QThread):
 
-
     sigFrame = pyqtSignal(int)
+    sigFail = pyqtSignal(int)
     sigStopped = pyqtSignal()
 
-    def __init__(self):
+    def __init__(self, capnum=0):
         super(QThread, self).__init__()
         self.img = None
         self.mutex = QMutex()
@@ -25,9 +26,12 @@ class CameraThread(QThread):
         self.ps = 0
         self.stopcount = 0
           # 创建内置摄像头变量
-        self.fetchThread = FetchThread()
+        self.fetchThread = FetchThread(capnum)
         self.fetchThread.sigFrame.connect(self.getNextFrame)
+        self.fetchThread.sigFail.connect(self.fail)
 
+    def fail(self):
+        self.sigFail.emit(self.fetchThread.capnum)
 
     def sigterm(self):
         self.brk = 1
@@ -38,7 +42,6 @@ class CameraThread(QThread):
         self.fetchThread.deleteLater()
         return True
 
-
     def run(self):
         #线程相关的代码
         # 抓取摄像头视频图像
@@ -46,10 +49,8 @@ class CameraThread(QThread):
             self.fetchThread.start()
             self.wait(1000)
 
-
     def setPs(self):
         self.ps = 1
-
 
     def unsetPs(self):
         self.ps = 0
@@ -61,12 +62,14 @@ class CameraThread(QThread):
                                   QtGui.QImage.Format_RGB32)
             self.mutex.lock()
             self.img = qimage
+            # print(self.img.width(), self.img.height())
             self.mutex.unlock()
             self.sigFrame.emit(self.framecount)
         else:
             self.sigStopped.emit()
         # if self.ps != 1:
         # print("framesent:", self.framecount)
+
 
 if __name__ == '__main__':
     QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
