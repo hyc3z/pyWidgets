@@ -18,6 +18,10 @@ from reportlab.platypus import Paragraph, Table, TableStyle, Image
 # 注册字体
 
 pdfmetrics.registerFont(TTFont('SimSun', 'font/simsun.ttf'))
+pdfmetrics.registerFont(TTFont('fzst1', 'font/STXINGKA.TTF'))
+pdfmetrics.registerFont(TTFont('skai', 'font/STKAITI.TTF'))
+pdfmetrics.registerFont(TTFont('hwzs', 'font/STZHONGS.TTF'))
+
 
 
 class PdfUtils:
@@ -26,11 +30,123 @@ class PdfUtils:
         pass
 
     @staticmethod
-    def draw_title2(titlestr: str):
+    def draw_titleNew2(titlestr: str):
+        style = getSampleStyleSheet()
+        ct = style['Normal']
+        ct.fontName = 'hwzs'
+        ct.fontSize = 12
+        # 设置行距
+        ct.leading = 40
+        # 颜色
+        # ct.textColor =colors.blueviolet
+        ct.textColor = colors.HexColor(0x000000)
+        # 居中
+        # ct.alignment = 1
+        # 添加标题并居中
+        title = Paragraph(titlestr, ct)
+        return title
+    @staticmethod
+    def draw_titleNew2(titlestr: str):
+        style = getSampleStyleSheet()
+        ct = style['Normal']
+        ct.fontName = 'hwzs'
+        ct.fontSize = 16
+        # 设置行距
+        ct.leading = 40
+        # 颜色
+        # ct.textColor =colors.blueviolet
+        ct.textColor = colors.HexColor(0x000000)
+        # 居中
+        # ct.alignment = 1
+        # 添加标题并居中
+        title = Paragraph(titlestr, ct)
+        return title
+    @staticmethod
+    def draw_txetNew(titlestr:str):
         style = getSampleStyleSheet()
         ct = style['Normal']
         ct.fontName = 'SimSun'
-        ct.fontSize = 15
+        ct.fontSize = 13
+        # 设置行距
+        ct.leading = 40
+        # 颜色
+        # ct.textColor =colors.blueviolet
+        ct.textColor = colors.HexColor(0x000000)
+        # 居中
+        # ct.alignment = 1
+        # 添加标题并居中
+        title = Paragraph(titlestr, ct)
+        return title
+        pass
+    @staticmethod
+    def draw_titleNew1(titlestr:str):
+        style = getSampleStyleSheet()
+        ct = style['Normal']
+        ct.fontName = 'hwzs'
+        ct.fontSize = 13
+        # 设置行距
+        ct.leading = 40
+        # 颜色
+        # ct.textColor =colors.blueviolet
+        ct.textColor =colors.HexColor(0x000000)
+        # 居中
+        # ct.alignment = 1
+        # 添加标题并居中
+        title = Paragraph(titlestr, ct)
+        return title
+    def draw_titleNew(titlestr:str):
+        style = getSampleStyleSheet()
+        ct = style['Normal']
+        ct.fontName = 'hwzs'
+        ct.fontSize = 25
+        # 设置行距
+        ct.leading = 40
+        # 颜色
+        # ct.textColor =colors.blueviolet
+        ct.textColor =colors.HexColor(0x000000)
+        # 居中
+        ct.alignment = 1
+        # 添加标题并居中
+        title = Paragraph(titlestr, ct)
+        return title
+    @staticmethod
+    def draw_title4(titlestr: str,text:str):
+        style = getSampleStyleSheet()
+        ct = style['Normal']
+        ct.fontName = 'fzst1'
+        ct.fontSize = 20
+        # 设置行距
+        ct.leading = 40
+        # 颜色
+        # ct.textColor =colors.blueviolet
+        ct.textColor = colors.HexColor(0x215294)
+        # 居中
+        ct.alignment = 1
+        # 添加标题并居中
+        title = Paragraph(titlestr, ct)
+        return title
+    @staticmethod
+    def draw_title3(titlestr: str):
+        style = getSampleStyleSheet()
+        ct = style['Normal']
+        ct.fontName = 'fzst1'
+        ct.fontSize = 20
+        # 设置行距
+        ct.leading = 40
+        # 颜色
+        # ct.textColor =colors.blueviolet
+        ct.textColor = colors.HexColor(0x215294)
+        # 居中
+        ct.alignment = 1
+        # 添加标题并居中
+        title = Paragraph(titlestr, ct)
+        return title
+    @staticmethod
+    def draw_title2(titlestr: str):
+        style = getSampleStyleSheet()
+        ct = style['Normal']
+        ct.fontName = 'fzst1'
+        ct.fontSize = 18
         # 设置行距
         ct.leading = 40
         # 颜色
@@ -46,7 +162,7 @@ class PdfUtils:
     def draw_title1(titlestr:str):
         style = getSampleStyleSheet()
         ct = style['Normal']
-        ct.fontName = 'SimSun'
+        ct.fontName = 'fzst1'
         ct.fontSize = 30
         # 设置行距
         ct.leading = 40
@@ -63,12 +179,12 @@ class PdfUtils:
     def draw_title(titlestr:str):
         style = getSampleStyleSheet()
         ct = style['Normal']
-        ct.fontName = 'SimSun'
-        ct.fontSize = 20
+        ct.fontName = 'fzst1'
+        ct.fontSize = 24
         # 设置行距
         ct.leading = 40
         # 颜色
-        ct.textColor = colors.blue
+        ct.textColor = colors.HexColor(0x215294)
         # ct.textColor = colors.HexColor(0x215294)
         # 居中
         ct.alignment = 1
@@ -100,8 +216,8 @@ class PdfUtils:
         # 常规字体(非粗体或斜体)
         ct = style['Normal']
         # 使用的字体s
-        ct.fontName = 'SimSun'
-        ct.fontSize = 12
+        ct.fontName = 'skai'
+        ct.fontSize = 13
         # 设置自动换行
         ct.wordWrap = 'CJK'
         # 居中对齐
@@ -199,6 +315,7 @@ if __name__ == "__main__":
     # c.setFont("song",12)
     a = Image("logo_zjdxyxy.png", width=175, height=38)
     b = Image("logo_window.png", width=100, height=38)
+    d=Image("image/huawen.jpg",width=50,height=50)
     print(A4)
     a.drawOn(c, 75, 750)
     num = str(time.strftime('%Y%m%d%H%M', time.localtime(time.time())))
@@ -225,7 +342,9 @@ if __name__ == "__main__":
     para.wrapOn(c, 440, baseline - delta)
     para.drawOn(c, 75, baseline - delta)
     delta += PdfUtils.calc_verti_length(str_bingshi, 12)
+    delta-=50
     title2 = PdfUtils.draw_title("测距结果")
+    d.drawOn(c,200,baseline-delta)
     title2.wrapOn(c, 440, baseline - delta)
     title2.drawOn(c, 75, baseline - delta)
     # delta += PdfUtils.calc_verti_length(str_bingshi, 12)

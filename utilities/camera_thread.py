@@ -25,6 +25,7 @@ class CameraThread(QThread):
         self.brk = 0
         self.ps = 0
         self.stopcount = 0
+        self.lastrun = 0
           # 创建内置摄像头变量
         self.fetchThread = FetchThread(capnum)
         self.fetchThread.sigFrame.connect(self.getNextFrame)
@@ -37,9 +38,11 @@ class CameraThread(QThread):
         self.brk = 1
         self.ps = 1
         self.fetchThread.setTerminationEnabled(True)
+        self.fetchThread.exit(0)
         self.fetchThread.terminate()
         self.fetchThread.wait()
         self.fetchThread.deleteLater()
+        self.exit(0)
         return True
 
     def run(self):
@@ -56,24 +59,34 @@ class CameraThread(QThread):
         self.ps = 0
 
     def getNextFrame(self, img):
+
+        # print(self.img.width(), self.img.height())
+        # self.mutex.unlock()
         if self.ps == 0:
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2BGRA)
             qimage = QtGui.QImage(img_rgb.data, img_rgb.shape[1], img_rgb.shape[0],
                                   QtGui.QImage.Format_RGB32)
-            self.mutex.lock()
+            # self.mutex.lock()
             self.img = qimage
-            # print(self.img.width(), self.img.height())
-            self.mutex.unlock()
+            self.framecount += 1
             self.sigFrame.emit(self.framecount)
+            # if self.framecount > 100:
+            #     self.sigterm()
+            # print("framesent:", self.framecount)
+            self.lastrun = 1
         else:
-            self.sigStopped.emit()
+            if self.lastrun == 1:
+                self.sigStopped.emit()
+                self.lastrun = 0
+            else:
+                self.lastrun = 0
         # if self.ps != 1:
-        # print("framesent:", self.framecount)
+        #     print("framesent:", self.framecount)
 
 
 if __name__ == '__main__':
     QApplication.setAttribute(QtCore.Qt.AA_EnableHighDpiScaling)
     app = QApplication(sys.argv)
-    thread = CameraThread()
+    thread = CameraThread(0)
     thread.start()
     sys.exit(app.exec_())

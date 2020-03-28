@@ -1,3 +1,5 @@
+import csv
+import os
 from PyQt5 import QtCore, QtGui
 from PyQt5.QtCore import QPoint, QPointF, Qt, QLineF, QRect, QRectF, QThread, QObject, pyqtSignal
 from PyQt5.QtGui import QPainter, QLinearGradient, QBrush, QPen, QPixmap, QFont, QImage
@@ -9,6 +11,7 @@ import numpy as np
 import numpy
 from customedQGraphicsLineItem import CustomedQGraphicsLineItem
 from input_dialog import DialogInput
+from logger import SystemLogger
 
 class CircleDetector(QObject):
 
@@ -17,6 +20,22 @@ class CircleDetector(QObject):
     # sigItem = pyqtSignal(QGraphicsPixmapItem)
     sigFinish = pyqtSignal(numpy.ndarray)
     sigReferenceNotFound = pyqtSignal()
+
+
+    def loadData(self):
+        if os.path.exists("ReferenceData.csv"):
+            f = open("ReferenceData.csv", "r")
+            reader = csv.DictReader(f)
+            for i in reader:
+                self.minR=int(i['minR'])
+                self.maxR=int(i['maxR'])
+                self.actSize=int(i['actSize'])
+            f.close()
+
+        else:
+            self.minR=0
+            self.maxR=300
+            self.actSize=25
 
     def convertToMat(self, pixmapItem):
         '''  Converts a QImage into an opencv MAT format  '''
@@ -46,10 +65,12 @@ class CircleDetector(QObject):
 
     def detectCircle(self, pixmapItem):
         # self.sigPreparing.emit()
+        self.loadData()
         mat = self.convertToMat(pixmapItem)
         gray = cv2.cvtColor(mat, cv2.COLOR_BGR2GRAY)
-        circle1 = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 3000, param1=100, param2=30, minRadius=0,
-                                   maxRadius=300)
+        SystemLogger.log_info("开始圆检测",self.minR,self.maxR)
+        circle1 = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, 1, 3000, param1=100, param2=30, minRadius=self.minR,
+                                   maxRadius=self.maxR)
         if circle1 is not None:
             circles = circle1[0, :, :]
             circles = np.uint16(np.around(circles))
@@ -57,7 +78,7 @@ class CircleDetector(QObject):
                 cv2.circle(mat, (i[0], i[1]), i[2], (255, 0, 0), 2)
                 cv2.circle(mat, (i[0], i[1]), 2, (255, 0, 255), 10)
                 cv2.rectangle(mat, (i[0] - i[2], i[1] + i[2]), (i[0] + i[2], i[1] - i[2]), (255, 255, 0), 5)
-                # print('半径为', i[2])
+                # SystemLogger.log_info('半径为', i[2])
                 Length = i[2] * 2
                 # self.sigPreparingFinished.emit()
                 # 平方毫米
@@ -65,11 +86,11 @@ class CircleDetector(QObject):
                 # actualArea = math.pi * 12.5 * 12.5 / self.referencePixelsArea
                 # item = self.convertFromMat(mat)
                 self.sigLength.emit(Length)
-                print("Length emitted.")
+                SystemLogger.log_info("Length emitted.")
                 self.sigArea.emit(referencePixelsArea)
-                print("Area emitted.")
+                SystemLogger.log_info("Area emitted.")
                 self.sigFinish.emit(mat)
-                print("Mat emitted.")
+                SystemLogger.log_info("Mat emitted.")
         else:
             self.sigReferenceNotFound.emit()
 
@@ -125,8 +146,10 @@ class customedGraphicsView(QGraphicsView):
         self.dynamicLineStartPoint = None
         self.cvmat = None
         self.actualArea=1
+        self.high_res_qimage= None
 
-        self.referenceTrueLength = 25
+        # self.referenceTrueLength = 25
+        self.referenceTrueLength = self.getActSize()
         self.referencePixelsArea=None
         self.referencePixels = None
         self.referenceReady = False
@@ -174,6 +197,18 @@ class customedGraphicsView(QGraphicsView):
         # connect(worker, &Worker::resultReady, this, &Controller::handleResults);
         self.workerThread.start()
         self.setPen()
+    def getActSize(self):
+        actsize = 0
+        if os.path.exists("ReferenceData.csv"):
+            f = open("ReferenceData.csv", "r")
+            reader = csv.DictReader(f)
+
+            for i in reader:
+                actsize=i['actSize']
+            f.close()
+        else:
+            actsize=25
+        return int(actsize)
 
     def inputDepth(self):
         dialog = DialogInput(self)
@@ -207,13 +242,18 @@ class customedGraphicsView(QGraphicsView):
             if len(errstr) > 0:
                 self.inputError(errstr)
         return val
+    def chooseNeizi(self,type1):
+        SystemLogger.log_info(type1)
+        self.result =type1
+        self.sigTaskFinished.emit()
+        pass
     def setReferencePixels(self, pixels:float):
-        print("Length get!")
+        SystemLogger.log_info("Length get!")
         self.referencePixels = pixels
         self.actual = self.referenceTrueLength * 1.0 / self.referencePixels
 
     def setReferencePixelArea(self, area:float):
-        print("Area get!")
+        SystemLogger.log_info("Area get!")
         self.referencePixelsArea = area
 
     def measureVol(self):
@@ -268,14 +308,34 @@ class customedGraphicsView(QGraphicsView):
             # self.referenceReady = True
         self.setTemporaryCursor(Qt.CrossCursor)
 
-    def captureToQImage(self):
-        image = QImage(self.width(), self.height(), QImage.Format_RGB32)
-        painter = QPainter(image)
-        painter.setRenderHint(QPainter.Antialiasing)
-        self.render(painter)
-        painter.end()
-        print("Capture size:{}".format(image.size()))
-        return image
+    def captureToQImage(self, scale=False):
+        if self.scene() is not None:
+            sw = self.scene().width()
+            sh = self.scene().height()
+            swh = sw/sh
+            SystemLogger.log_info("sw:{} sh:{} w/h:{}".format(sw, sh, swh))
+            image = QImage(sw, sh, QImage.Format_RGB32)
+            painter = QPainter(image)
+            painter.setRenderHint(QPainter.Antialiasing)
+            self.scene().render(painter)
+            painter.end()
+        else:
+            w = self.width()
+            h = self.height()
+            wh = w / h
+            SystemLogger.log_info("w:{} h:{} w/h:{}".format(w, h, wh))
+            image = QImage(w, h, QImage.Format_RGB32)
+            painter = QPainter(image)
+            painter.setRenderHint(QPainter.Antialiasing)
+            self.scene().render(painter)
+            painter.end()
+        if not scale:
+            return image
+
+    def exportImage(self):
+        for i in self.items():
+            if isinstance(i, QGraphicsPixmapItem):
+                return i.pixmap().toImage()
 
     def dotToline(self):
         self.showDot=True
@@ -342,7 +402,7 @@ class customedGraphicsView(QGraphicsView):
             angle = abs(angle1) + abs(angle2)
         if angle > 180:
             angle = 360 - angle
-        print(angle)
+        SystemLogger.log_info(angle)
         if display:
             self.result = "角度：{}°".format(str(round(angle, roundnum)))
             self.paintText(str(round(angle, roundnum)), point=self.mapToScene(pointB))
@@ -373,7 +433,7 @@ class customedGraphicsView(QGraphicsView):
         return None
 
     def applyMat(self, mat):
-        print("Item get!")
+        SystemLogger.log_info("Item get!")
         img_rgb = cv2.cvtColor(mat, cv2.COLOR_BGR2BGRA)
         qimage = QtGui.QImage(img_rgb.data, img_rgb.shape[1], img_rgb.shape[0],
                               QtGui.QImage.Format_RGB32)
@@ -518,7 +578,7 @@ class customedGraphicsView(QGraphicsView):
 
     # def returnPressed(self):
     #     if self.lastTask == self.selectArea and len(self.selectedPointList) == 2:
-    #         print("({},{}),({},{})".format(self.selectedPointList[0].x(), self.selectedPointList[0].y(), self.selectedPointList[1].x(), self.selectedPointList[1].y()))
+    #         SystemLogger.log_info("({},{}),({},{})".format(self.selectedPointList[0].x(), self.selectedPointList[0].y(), self.selectedPointList[1].x(), self.selectedPointList[1].y()))
 
     def restorePhase(self):
         if self.captureLastPhase is not None:
@@ -541,16 +601,16 @@ class customedGraphicsView(QGraphicsView):
                 last_scale = self.curScale
                 self.restorePhase()
                 if round(last_scale, 2) != self.curScale:
-                    print(last_scale, self.curScale, "phase")
+                    SystemLogger.log_info(last_scale, self.curScale, "phase")
                     # self.scale(last_scale, last_scale)
             else:
                 last_scale = self.curScale
                 self.fitview(self.lastPic, cleartask=False, renew=True)
                 if round(last_scale, 2) != self.curScale:
-                    print(last_scale, self.curScale, "not phase")
+                    SystemLogger.log_info(last_scale, self.curScale, "not phase")
                     # self.scale(last_scale, last_scale)
         if pointB.x() < 0 or pointB.x() > self.width() or pointB.y() < 0 or pointB.y() > self.height():
-            print("Warning: point ({},{}) exceeds boundary.".format(pointB.x(), pointB.y()))
+            SystemLogger.log_info("Warning: point ({},{}) exceeds boundary.".format(pointB.x(), pointB.y()))
         x1 = pointA.x()
         y1 = pointA.y()
         if boundaryRestrict:
@@ -610,7 +670,7 @@ class customedGraphicsView(QGraphicsView):
         x = min(max(point.x(), 0), self.width())
         y = min(max(point.y(), 0), self.height())
         cls = type(point)
-        print(cls(x, y))
+        SystemLogger.log_info(cls(x, y))
         return cls(x, y)
 
     def assertPoint(self, point):
@@ -851,374 +911,386 @@ class customedGraphicsView(QGraphicsView):
         return round(self.transform().m11(), 2)
 
     def mousePressEvent(self, QMouseEvent):
-        if self.attr == "Picture":
-            cursorPoint = QMouseEvent.pos()
-            if not self.assertPoint(self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))):
-                QMouseEvent.ignore()
-                return
+        try:
+            if self.attr == "Picture":
+                cursorPoint = QMouseEvent.pos()
+                if not self.assertPoint(self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))):
+                    QMouseEvent.ignore()
+                    return
 
-            if QMouseEvent.button() == QtCore.Qt.LeftButton:
-                if self.finishedTask == True:
-                    if self.lastTask == self.selectArea:
-                        self.sigConfirmCrop.emit()
-                        self.finishedTask = False
-                    if self.lastTask == self.selectAreaDynamic:
-                        self.sigCroppedItem.emit(QGraphicsPixmapItem(self.cropped_pixmap), False)
-                        self.sigConfirmCrop.emit()
-                        self.finishedTask = False
-                        self.dynamicRectStartPoint = None
-                else:
-                    self.pressed = True
-                    if self.dynamicRectSelection :
-                        cursorPoint = self.restrictedPoint(QMouseEvent.pos())
-                        if self.dynamicRectStartPoint is None:
-                            self.dynamicRectStartPoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
-                            print("Rect anchor point selected.")
-                    elif self.lastTask==self.measureVol:
-                        if not self.referenceReady:
-                            return
-                        cursorPoint=self.restrictedPoint(QMouseEvent.pos())
-                        if self.isVol!=-1:
-                            if self.volDone:
-                                ans = self.calcArea(self.volPoint)
+                if QMouseEvent.button() == QtCore.Qt.LeftButton:
+                    if self.finishedTask == True:
+                        if self.lastTask == self.selectArea:
+                            self.sigConfirmCrop.emit()
+                            self.finishedTask = False
+                        if self.lastTask == self.selectAreaDynamic:
+                            self.sigCroppedItem.emit(QGraphicsPixmapItem(self.cropped_pixmap), False)
+                            self.sigConfirmCrop.emit()
+                            self.finishedTask = False
+                            self.dynamicRectStartPoint = None
+                    else:
+                        self.pressed = True
+                        if self.dynamicRectSelection :
+                            cursorPoint = self.restrictedPoint(QMouseEvent.pos())
+                            if self.dynamicRectStartPoint is None:
+                                self.dynamicRectStartPoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
+                                SystemLogger.log_info("Rect anchor point selected.")
+                        elif self.lastTask==self.measureVol:
+                            if not self.referenceReady:
+                                return
+                            cursorPoint=self.restrictedPoint(QMouseEvent.pos())
+                            if self.isVol!=-1:
+                                if self.volDone:
+                                    ans = self.calcArea(self.volPoint)
 
-                                ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
-                                middle_point = QPoint(0.5 * self.areaPoints[1].x() + 0.5 * self.areaPoints[0].x() + 20,
-                                                      0.5 * self.areaPoints[1].y() + 0.5 * self.areaPoints[0].y() - 50)
-                                self.result = "体积：{} mm³".format(str(round(float(ans), 2)))
-                                self.paintText(str(round(float(ans), 2)), middle_point)
-                                self.volPoint = []
-                                self.isVol = -1
-                                self.volDone=False
-                                self.unsetTemporaryCursor()
-                                self.sigTaskFinished.emit()
-                            else:
-                                self.isVol+=1
-                                self.volPoint.append(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
-                                num=len(self.volPoint)
-                                if num>1:
-                                    self.paintLine(self.volPoint[num-2],self.volPoint[num-1],clear=True,storephase=True)
-                    elif self.lastTask==self.measureArea:
-                        if not self.referenceReady:
-                            return
-                        cursorPoint=self.restrictedPoint(QMouseEvent.pos())
-                        if self.isArea!=-1:
-                            if self.areaDone:
-                                ans = self.calcArea(self.areaPoints)
-
-                                ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
-                                middle_point = QPoint(0.5 * self.areaPoints[1].x() + 0.5 * self.areaPoints[0].x() + 20,
-                                                      0.5 * self.areaPoints[1].y() + 0.5 * self.areaPoints[0].y() - 50)
-                                self.result = "面积：{} mm²".format(str(round(float(ans), 2)))
-                                self.paintText(str(round(float(ans), 2)), middle_point)
-                                self.areaPoints = []
-                                self.isArea = -1
-                                self.areaDone=False
-                                self.unsetTemporaryCursor()
-                                self.sigTaskFinished.emit()
-
-                            else:
-                                self.isArea+=1
-                                self.areaPoints.append(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
-                                num=len(self.areaPoints)
-                                if num>1:
-                                    self.paintLine(self.areaPoints[num-2],self.areaPoints[num-1],clear=True,storephase=True)
-                    elif self.lastTask==self.curveLength:
-
-                        if not self.referenceReady:
-                            return
-                        cursorPoint=self.restrictedPoint(QMouseEvent.pos())
-
-                        if self.isCurve!=-1:
-
-                            if self.curveDone:
-                                ans=self.calcCurveLength(self.curvePoints)
-                                ans=ans*self.actual
-                                middle_point = QPoint(0.5 * self.curvePoints[1].x() + 0.5 * self.curvePoints[0].x() + 20,
-                                                      0.5 * self.curvePoints[1].y() + 0.5 * self.curvePoints[0].y() - 50)
-                                self.result = "距离：{} mm".format(str(round(float(ans), 2)))
-                                self.paintText(str(round(float(ans), 2)), middle_point)
-                                self.curvePoints = []
-                                self.isCurve = -1
-                                self.curveDone = False
-                                self.unsetTemporaryCursor()
-                                self.sigTaskFinished.emit()
-
-                            else:
-                                self.isCurve+=1
-                                self.curvePoints.append(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
-                                num=len(self.curvePoints)
-                                if num>1:
-                                    self.paintLine(self.curvePoints[num-2],self.curvePoints[num-1],clear=True,storephase=True)
-
-                    elif self.lastTask==self.noseLength:
-                        if not self.referenceReady:
-                            return
-                        cursorPoint = self.restrictedPoint(QMouseEvent.pos())
-                        if self.isNose!=-1:
-                            if self.dynamicLineStartPoint is None:
-                                self.dynamicLineStartPoint=self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
-                                self.paintDot(self.dynamicLineStartPoint)
-                                self. nosePoints.append(self.dynamicLineStartPoint)
-                            else:
-                                self.nosePoints.append(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
-                                self.paintLine(self.dynamicLineStartPoint,self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())),clear=True,storephase=True)
-                                dx=self.nosePoints[0].x()-self.nosePoints[1].x()
-                                dy=self.nosePoints[0].y()-self.nosePoints[1].y()
-                                ans=dx*dx+dy*dy
-                                ans=math.sqrt(ans)
-                                # ans=ans*self.actual
-                                ans = ans * 1.0 / self.referencePixels * self.referenceTrueLength
-
-                                middle_point = QPoint(0.5 * self.nosePoints[1].x() + 0.5 * self.nosePoints[0].x()+20,
-                                                      0.5 * self.nosePoints[1].y() + 0.5 * self.nosePoints[0].y()-50)
-                                self.result = "距离：{} mm".format(str(round(float(ans), 2)))
-                                self.paintText(str(round(float(ans), 2)), middle_point)
-                                self.nosePoints=[]
-                                self.isNose=-1
-                                self.dynamicLineStartPoint=None
-
-                                self.unsetTemporaryCursor()
-                                self.sigTaskFinished.emit()
-                    elif self.lastTask==self.dotToline:
-                        if not self.referenceReady:
-                            return
-                        cursorPoint=self.restrictedPoint(QMouseEvent.pos())
-                        if self.isDotToLine!=-1:
-                            if self.dynamicLineStartPoint is None:
-                                self.dynamicLineStartPoint=self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y()))
-                                self.paintDot(self.dynamicLineStartPoint)
-                                self.dotLine.append(self.dynamicLineStartPoint)
-                            else:
-                                if len(self.dotLine)==1:
-                                    self.dotLine.append(self.mapToScene((QPoint(cursorPoint.x(),cursorPoint.y()))))
-                                    self.paintLine(self.dynamicLineStartPoint,self.dotLine[1],clear=True,storephase=False)
-                                    self.isDotToLine+=1
-                                elif len(self.dotLine)==2:
-                                    print(len(self.dotLine))
-                                    self.dotLine.append(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
-                                    self.paintDot(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
-                                    if self.dotLine[0].x()!=self.dotLine[1].x():
-                                        print(self.dotLine)
-                                        dy=self.dotLine[1].y()-self.dotLine[0].y()
-                                        dx=self.dotLine[1].x()-self.dotLine[0].x()
-                                        k=dy*1.0/dx
-                                        A=k
-                                        B=-1
-                                        C=-k*self.dotLine[0].x()+self.dotLine[0].y()
-                                        fz=A*self.dotLine[2].x()+B*self.dotLine[2].y()+C
-                                        fm=math.sqrt(A*A+B*B)
-                                        ans=math.fabs(fz)*1.0/fm
-                                        ans = ans * self.actual
-                                        middle_point = QPoint(
-                                            0.5 * self.dotLine[1].x() + 0.5 * self.dotLine[0].x() + 20,
-                                            0.5 * self.dotLine[1].y() + 0.5 * self.dotLine[0].y() - 50)
-                                        self.result = "距离：{} mm".format(str(round(float(ans), 2)))
-                                        self.paintText(str(round(float(ans), 2)), middle_point)
-                                        self.dotLine=[]
-                                        self.isDotToLine=-1
-                                        self.dynamicLineStartPoint=None
-                                        self.unsetTemporaryCursor()
-                                        self.sigTaskFinished.emit()
-                                    else:
-                                        ans=self.dotLine[2].x()-self.dotLine[0].x()
-                                        ans=ans*self.actual
-                                        # ans = ans*1.0/ self.referencePixels * self.referenceTrueLength
-                                        middle_point = QPoint(
-                                            0.5 * self.dotLine[1].x() + 0.5 * self.dotLine[0].x() + 20,
-                                            0.5 * self.dotLine[1].y() + 0.5 * self.dotLine[0].y() - 50)
-                                        self.result = "距离：{} mm".format(str(round(float(ans), 2)))
-                                        self.paintText(str(round(float(ans), 2)), middle_point)
-                                        self.dotLine = []
-                                        self.isDotToLine = -1
-                                        self.dynamicLineStartPoint = None
-                                        self.unsetTemporaryCursor()
-                                        self.sigTaskFinished.emit()
-
-                    elif self.dynamicLineSelection or 0 <= self.dynamicAngleSelectionPhase <= 2:
-                        cursorPoint = self.restrictedPoint(QMouseEvent.pos())
-                        if self.dynamicLineStartPoint is None:
-                            self.dynamicLineStartPoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
-                            print("Line anchor point selected.")
-                            if self.dynamicAngleSelectionPhase != -1:
-                                self.anglePoints.append(QPoint(cursorPoint.x(), cursorPoint.y()))
-                        else:
-                            if self.dynamicAngleSelectionPhase != -1:
-                                self.dynamicAngleSelectionPhase += 1
-                                self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y())),
-                                               clear=True, storephase=True)
-                                if self.dynamicAngleSelectionPhase < 2:
-                                    self.dynamicLineStartPoint = self.mapToScene(
-                                        QPoint(cursorPoint.x(), cursorPoint.y()))
-                                    print(
-                                        "Line anchor point phase {} selected.".format(self.dynamicAngleSelectionPhase))
-                                    if self.dynamicAngleSelectionPhase != -1:
-                                        self.anglePoints.append(QPoint(cursorPoint.x(), cursorPoint.y()))
-                                else:
-                                    if self.dynamicAngleSelectionPhase != -1:
-                                        self.anglePoints.append(QPoint(cursorPoint.x(), cursorPoint.y()))
-                                        self.calcAngle(self.anglePoints[0], self.anglePoints[1], self.anglePoints[2],
-                                                       display=True, roundnum=2)
-                                    self.dynamicAngleSelectionPhase = -1
-                                    self.dynamicLineStartPoint = None
-                                    self.anglePoints.clear()
+                                    ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
+                                    middle_point = QPoint(0.5 * self.areaPoints[1].x() + 0.5 * self.areaPoints[0].x() + 20,
+                                                          0.5 * self.areaPoints[1].y() + 0.5 * self.areaPoints[0].y() - 50)
+                                    self.result = "体积：{} mm³".format(str(round(float(ans), 2)))
+                                    self.paintText(str(round(float(ans), 2)), middle_point)
+                                    self.volPoint = []
+                                    self.isVol = -1
+                                    self.volDone=False
                                     self.unsetTemporaryCursor()
                                     self.sigTaskFinished.emit()
+                                else:
+                                    self.isVol+=1
+                                    self.volPoint.append(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
+                                    num=len(self.volPoint)
+                                    if num>1:
+                                        self.paintLine(self.volPoint[num-2],self.volPoint[num-1],clear=True,storephase=True)
+                        elif self.lastTask==self.measureArea:
+                            if not self.referenceReady:
+                                return
+                            cursorPoint=self.restrictedPoint(QMouseEvent.pos())
+                            if self.isArea!=-1:
+                                if self.areaDone:
+                                    ans = self.calcArea(self.areaPoints)
+
+                                    ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
+                                    middle_point = QPoint(0.5 * self.areaPoints[1].x() + 0.5 * self.areaPoints[0].x() + 20,
+                                                          0.5 * self.areaPoints[1].y() + 0.5 * self.areaPoints[0].y() - 50)
+                                    self.result = "面积：{} mm²".format(str(round(float(ans), 2)))
+                                    self.paintText(str(round(float(ans), 2)), middle_point)
+                                    self.areaPoints = []
+                                    self.isArea = -1
+                                    self.areaDone=False
+                                    self.unsetTemporaryCursor()
+                                    self.sigTaskFinished.emit()
+
+                                else:
+                                    self.isArea+=1
+                                    self.areaPoints.append(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
+                                    num=len(self.areaPoints)
+                                    if num>1:
+                                        self.paintLine(self.areaPoints[num-2],self.areaPoints[num-1],clear=True,storephase=True)
+                        elif self.lastTask==self.curveLength:
+
+                            if not self.referenceReady:
+                                return
+                            cursorPoint=self.restrictedPoint(QMouseEvent.pos())
+
+                            if self.isCurve!=-1:
+
+                                if self.curveDone:
+                                    ans=self.calcCurveLength(self.curvePoints)
+                                    ans=ans*self.actual
+                                    middle_point = QPoint(0.5 * self.curvePoints[1].x() + 0.5 * self.curvePoints[0].x() + 20,
+                                                          0.5 * self.curvePoints[1].y() + 0.5 * self.curvePoints[0].y() - 50)
+                                    self.result = "距离：{} mm".format(str(round(float(ans), 2)))
+                                    self.paintText(str(round(float(ans), 2)), middle_point)
+                                    self.curvePoints = []
+                                    self.isCurve = -1
+                                    self.curveDone = False
+                                    self.unsetTemporaryCursor()
+                                    self.sigTaskFinished.emit()
+
+                                else:
+                                    self.isCurve+=1
+                                    self.curvePoints.append(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
+                                    num=len(self.curvePoints)
+                                    if num>1:
+                                        self.paintLine(self.curvePoints[num-2],self.curvePoints[num-1],clear=True,storephase=True)
+
+                        elif self.lastTask==self.noseLength:
+                            if not self.referenceReady:
+                                return
+                            cursorPoint = self.restrictedPoint(QMouseEvent.pos())
+                            if self.isNose!=-1:
+                                if self.dynamicLineStartPoint is None:
+                                    self.dynamicLineStartPoint=self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
+                                    self.paintDot(self.dynamicLineStartPoint)
+                                    self. nosePoints.append(self.dynamicLineStartPoint)
+                                else:
+                                    self.nosePoints.append(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
+                                    self.paintLine(self.dynamicLineStartPoint,self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())),clear=True,storephase=True)
+                                    dx=self.nosePoints[0].x()-self.nosePoints[1].x()
+                                    dy=self.nosePoints[0].y()-self.nosePoints[1].y()
+                                    ans=dx*dx+dy*dy
+                                    ans=math.sqrt(ans)
+                                    # ans=ans*self.actual
+                                    ans = ans * 1.0 / self.referencePixels * self.referenceTrueLength
+
+                                    middle_point = QPoint(0.5 * self.nosePoints[1].x() + 0.5 * self.nosePoints[0].x()+20,
+                                                          0.5 * self.nosePoints[1].y() + 0.5 * self.nosePoints[0].y()-50)
+                                    self.result = "距离：{} mm".format(str(round(float(ans), 2)))
+                                    self.paintText(str(round(float(ans), 2)), middle_point)
+                                    self.nosePoints=[]
+                                    self.isNose=-1
+                                    self.dynamicLineStartPoint=None
+
+                                    self.unsetTemporaryCursor()
+                                    self.sigTaskFinished.emit()
+                        elif self.lastTask==self.dotToline:
+                            if not self.referenceReady:
+                                return
+                            cursorPoint=self.restrictedPoint(QMouseEvent.pos())
+                            if self.isDotToLine!=-1:
+                                if self.dynamicLineStartPoint is None:
+                                    self.dynamicLineStartPoint=self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y()))
+                                    self.paintDot(self.dynamicLineStartPoint)
+                                    self.dotLine.append(self.dynamicLineStartPoint)
+                                else:
+                                    if len(self.dotLine)==1:
+                                        self.dotLine.append(self.mapToScene((QPoint(cursorPoint.x(),cursorPoint.y()))))
+                                        self.paintLine(self.dynamicLineStartPoint,self.dotLine[1],clear=True,storephase=False)
+                                        self.isDotToLine+=1
+                                    elif len(self.dotLine)==2:
+                                        SystemLogger.log_info(len(self.dotLine))
+                                        self.dotLine.append(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
+                                        self.paintDot(self.mapToScene(QPoint(cursorPoint.x(),cursorPoint.y())))
+                                        if self.dotLine[0].x()!=self.dotLine[1].x():
+                                            SystemLogger.log_info(self.dotLine)
+                                            dy=self.dotLine[1].y()-self.dotLine[0].y()
+                                            dx=self.dotLine[1].x()-self.dotLine[0].x()
+                                            k=dy*1.0/dx
+                                            A=k
+                                            B=-1
+                                            C=-k*self.dotLine[0].x()+self.dotLine[0].y()
+                                            fz=A*self.dotLine[2].x()+B*self.dotLine[2].y()+C
+                                            fm=math.sqrt(A*A+B*B)
+                                            ans=math.fabs(fz)*1.0/fm
+                                            ans = ans * self.actual
+                                            middle_point = QPoint(
+                                                0.5 * self.dotLine[1].x() + 0.5 * self.dotLine[0].x() + 20,
+                                                0.5 * self.dotLine[1].y() + 0.5 * self.dotLine[0].y() - 50)
+                                            self.result = "距离：{} mm".format(str(round(float(ans), 2)))
+                                            self.paintText(str(round(float(ans), 2)), middle_point)
+                                            self.dotLine=[]
+                                            self.isDotToLine=-1
+                                            self.dynamicLineStartPoint=None
+                                            self.unsetTemporaryCursor()
+                                            self.sigTaskFinished.emit()
+                                        else:
+                                            ans=self.dotLine[2].x()-self.dotLine[0].x()
+                                            ans=ans*self.actual
+                                            # ans = ans*1.0/ self.referencePixels * self.referenceTrueLength
+                                            middle_point = QPoint(
+                                                0.5 * self.dotLine[1].x() + 0.5 * self.dotLine[0].x() + 20,
+                                                0.5 * self.dotLine[1].y() + 0.5 * self.dotLine[0].y() - 50)
+                                            self.result = "距离：{} mm".format(str(round(float(ans), 2)))
+                                            self.paintText(str(round(float(ans), 2)), middle_point)
+                                            self.dotLine = []
+                                            self.isDotToLine = -1
+                                            self.dynamicLineStartPoint = None
+                                            self.unsetTemporaryCursor()
+                                            self.sigTaskFinished.emit()
+
+                        elif self.dynamicLineSelection or 0 <= self.dynamicAngleSelectionPhase <= 2:
+                            cursorPoint = self.restrictedPoint(QMouseEvent.pos())
+                            if self.dynamicLineStartPoint is None:
+                                self.dynamicLineStartPoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
+                                SystemLogger.log_info("Line anchor point selected.")
+                                if self.dynamicAngleSelectionPhase != -1:
+                                    self.anglePoints.append(QPoint(cursorPoint.x(), cursorPoint.y()))
                             else:
-                                self.dynamicLineSelection = False
-                                self.unsetTemporaryCursor()
-                                self.dynamicLineStartPoint = None
-                    elif self.lastTask == self.measureHLength:
-                        if not self.referenceReady:
+                                if self.dynamicAngleSelectionPhase != -1:
+                                    self.dynamicAngleSelectionPhase += 1
+                                    self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y())),
+                                                   clear=True, storephase=True)
+                                    if self.dynamicAngleSelectionPhase < 2:
+                                        self.dynamicLineStartPoint = self.mapToScene(
+                                            QPoint(cursorPoint.x(), cursorPoint.y()))
+                                        SystemLogger.log_info(
+                                            "Line anchor point phase {} selected.".format(self.dynamicAngleSelectionPhase))
+                                        if self.dynamicAngleSelectionPhase != -1:
+                                            self.anglePoints.append(QPoint(cursorPoint.x(), cursorPoint.y()))
+                                    else:
+                                        if self.dynamicAngleSelectionPhase != -1:
+                                            self.anglePoints.append(QPoint(cursorPoint.x(), cursorPoint.y()))
+                                            self.calcAngle(self.anglePoints[0], self.anglePoints[1], self.anglePoints[2],
+                                                           display=True, roundnum=2)
+                                        self.dynamicAngleSelectionPhase = -1
+                                        self.dynamicLineStartPoint = None
+                                        self.anglePoints.clear()
+                                        self.unsetTemporaryCursor()
+                                        self.sigTaskFinished.emit()
+                                else:
+                                    self.dynamicLineSelection = False
+                                    self.unsetTemporaryCursor()
+                                    self.dynamicLineStartPoint = None
+                        elif self.lastTask == self.measureHLength:
+                            if not self.referenceReady:
+                                return
+                            else:
+                                if self.mountHPoint is None:
+                                    self.mountHPoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
+                                    self.mountVerticalLine(self.mountHPoint)
+                                else:
+                                    newpoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
+                                    absdiff = abs(newpoint.x() - self.mountHPoint.x())
+                                    ans = absdiff / self.referencePixels * self.referenceTrueLength
+                                    middle_point = QPoint(0.5*newpoint.x() + 0.5*self.mountHPoint.x(),
+                                                          0.5*newpoint.y() + 0.5*self.mountHPoint.y())
+                                    self.mountVerticalLine(newpoint)
+                                    self.result = "距离：{} mm".format(str(round(float(ans), 2)))
+                                    self.paintText(str(round(float(ans), 2)), middle_point)
+                                    self.mountHPoint = None
+                                    self.unsetTemporaryCursor()
+                                    self.sigTaskFinished.emit()
+                        elif self.lastTask == self.measureVLength:
+                            if not self.referenceReady:
+                                return
+                            else:
+                                if self.mountVPoint is None:
+                                    self.mountVPoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
+                                    self.mountHorizontalLine(self.mountVPoint)
+                                else:
+                                    newpoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
+                                    absdiff = abs(newpoint.y() - self.mountVPoint.y())
+                                    ans = absdiff / self.referencePixels * self.referenceTrueLength
+                                    middle_point = QPoint(0.5 * newpoint.x() + 0.5 * self.mountVPoint.x(),
+                                                          0.5 * newpoint.y() + 0.5 * self.mountVPoint.y())
+                                    self.mountHorizontalLine(newpoint)
+                                    self.result = "距离：{} mm".format(str(round(float(ans), 2)))
+                                    self.paintText(str(round(float(ans), 2)), middle_point)
+                                    self.mountVPoint = None
+                                    self.unsetTemporaryCursor()
+                                    self.sigTaskFinished.emit()
+                        else:
+                            SystemLogger.log_info("Static point selected.")
+                            if self.selectedPoint == -1:
+                                self.setCurrentCursor(self.chooseCursor())
+                            else:
+                                cursorPoint = QMouseEvent.pos()
+                                scenePos = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
+                                self.storePoint(scenePos)
+                elif QMouseEvent.button() == QtCore.Qt.RightButton:
+                    if self.volDone==False and self.isVol>-1:
+                        self.volDone = True
+                        num = len(self.volPoint)
+                        if num >= 2:
+                            self.paintLine(self.volPoint[0], self.volPoint[num - 1], clear=True, storephase=True)
+                            ans = self.calcArea(self.volPoint)
+
+                            ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
+                            middle_point = QPoint(0.5 * self.volPoint[1].x() + 0.5 * self.volPoint[0].x() + 20,
+                                                  0.5 * self.volPoint[1].y() + 0.5 * self.volPoint[0].y() - 50)
+                            ans=1.0/3*ans*float(self.inputDepth())
+                            self.result = "体积：{} mm³".format(str(round(float(ans), 2)))
+                            self.paintText(str(round(float(ans), 2)), middle_point)
+                            self.volPoint = []
+                            self.isVol = -1
+                            self.volDone = False
+                            self.unsetTemporaryCursor()
+                            self.sigTaskFinished.emit()
                             return
-                        else:
-                            if self.mountHPoint is None:
-                                self.mountHPoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
-                                self.mountVerticalLine(self.mountHPoint)
-                            else:
-                                newpoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
-                                absdiff = abs(newpoint.x() - self.mountHPoint.x())
-                                ans = absdiff / self.referencePixels * self.referenceTrueLength
-                                middle_point = QPoint(0.5*newpoint.x() + 0.5*self.mountHPoint.x(),
-                                                      0.5*newpoint.y() + 0.5*self.mountHPoint.y())
-                                self.mountVerticalLine(newpoint)
-                                self.result = "距离：{} mm".format(str(round(float(ans), 2)))
-                                self.paintText(str(round(float(ans), 2)), middle_point)
-                                self.mountHPoint = None
-                                self.unsetTemporaryCursor()
-                                self.sigTaskFinished.emit()
-                    elif self.lastTask == self.measureVLength:
-                        if not self.referenceReady:
+
+                    if self.areaDone==False and self.isArea>-1:
+                        self.areaDone=True
+                        num=len(self.areaPoints)
+                        if num >= 2:
+                            self.paintLine(self.areaPoints[0],self.areaPoints[num-1],clear=True,storephase=True)
+                            ans = self.calcArea(self.areaPoints)
+
+                            ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
+                            middle_point = QPoint(0.5 * self.areaPoints[1].x() + 0.5 * self.areaPoints[0].x() + 20,
+                                                  0.5 * self.areaPoints[1].y() + 0.5 * self.areaPoints[0].y() - 50)
+                            self.result = "面积：{} mm²".format(str(round(float(ans), 2)))
+                            self.paintText(str(round(float(ans), 2)), middle_point)
+                            self.areaPoints = []
+                            self.isArea = -1
+                            self.areaDone = False
+                            self.unsetTemporaryCursor()
+                            self.sigTaskFinished.emit()
                             return
-                        else:
-                            if self.mountVPoint is None:
-                                self.mountVPoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
-                                self.mountHorizontalLine(self.mountVPoint)
-                            else:
-                                newpoint = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
-                                absdiff = abs(newpoint.y() - self.mountVPoint.y())
-                                ans = absdiff / self.referencePixels * self.referenceTrueLength
-                                middle_point = QPoint(0.5 * newpoint.x() + 0.5 * self.mountVPoint.x(),
-                                                      0.5 * newpoint.y() + 0.5 * self.mountVPoint.y())
-                                self.mountHorizontalLine(newpoint)
-                                self.result = "距离：{} mm".format(str(round(float(ans), 2)))
-                                self.paintText(str(round(float(ans), 2)), middle_point)
-                                self.mountVPoint = None
-                                self.unsetTemporaryCursor()
-                                self.sigTaskFinished.emit()
-                    else:
-                        print("Static point selected.")
-                        if self.selectedPoint == -1:
-                            self.setCurrentCursor(self.chooseCursor())
-                        else:
-                            cursorPoint = QMouseEvent.pos()
-                            scenePos = self.mapToScene(QPoint(cursorPoint.x(), cursorPoint.y()))
-                            self.storePoint(scenePos)
-            elif QMouseEvent.button() == QtCore.Qt.RightButton:
-                if self.volDone==False and self.isVol>-1:
-                    self.volDone = True
-                    num = len(self.volPoint)
-                    self.paintLine(self.volPoint[0], self.volPoint[num - 1], clear=True, storephase=True)
-                    ans = self.calcArea(self.volPoint)
-
-                    ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
-                    middle_point = QPoint(0.5 * self.volPoint[1].x() + 0.5 * self.volPoint[0].x() + 20,
-                                          0.5 * self.volPoint[1].y() + 0.5 * self.volPoint[0].y() - 50)
-                    ans=1.0/3*ans*float(self.inputDepth())
-                    self.result = "体积：{} mm³".format(str(round(float(ans), 2)))
-                    self.paintText(str(round(float(ans), 2)), middle_point)
-                    self.volPoint = []
-                    self.isVol = -1
-                    self.volDone = False
-                    self.unsetTemporaryCursor()
-                    self.sigTaskFinished.emit()
-                    return
-
-                if self.areaDone==False and self.isArea>-1:
-                    self.areaDone=True
-                    num=len(self.areaPoints)
-                    self.paintLine(self.areaPoints[0],self.areaPoints[num-1],clear=True,storephase=True)
-                    ans = self.calcArea(self.areaPoints)
-
-                    ans = ans * math.pi * 12.5 * 12.5 / self.referencePixelsArea
-                    middle_point = QPoint(0.5 * self.areaPoints[1].x() + 0.5 * self.areaPoints[0].x() + 20,
-                                          0.5 * self.areaPoints[1].y() + 0.5 * self.areaPoints[0].y() - 50)
-                    self.result = "面积：{} mm²".format(str(round(float(ans), 2)))
-                    self.paintText(str(round(float(ans), 2)), middle_point)
-                    self.areaPoints = []
-                    self.isArea = -1
-                    self.areaDone = False
-                    self.unsetTemporaryCursor()
-                    self.sigTaskFinished.emit()
-                    return
-                if self.curveDone==False and self.isCurve>-1:
-                    self.curveDone=True
-                    num=len(self.curvePoints)
-                    # self.paintLine(self.curvePoints[0],self.curvePoints[num-1],clear=True,storephase=True)
-                    self.paintLine(self.curvePoints[0],self.curvePoints[1],clear=True,storephase=True)
-                    ans = self.calcCurveLength(self.curvePoints)
-                    ans = ans * self.actual
-                    middle_point = QPoint(0.5 * self.curvePoints[1].x() + 0.5 * self.curvePoints[0].x() + 20,
-                                          0.5 * self.curvePoints[1].y() + 0.5 * self.curvePoints[0].y() - 50)
-                    self.result = "距离：{} mm".format(str(round(float(ans), 2)))
-                    self.paintText(str(round(float(ans), 2)), middle_point)
-                    self.curvePoints = []
-                    self.isCurve = -1
-                    self.curveDone = False
-                    self.unsetTemporaryCursor()
-                    self.sigTaskFinished.emit()
-                    return
-                self.revert()
-                self.sigRightClicked.emit()
+                    if self.curveDone==False and self.isCurve>-1:
+                        self.curveDone=True
+                        num=len(self.curvePoints)
+                        if num >= 2:
+                        # self.paintLine(self.curvePoints[0],self.curvePoints[num-1],clear=True,storephase=True)
+                            self.paintLine(self.curvePoints[0],self.curvePoints[1],clear=True,storephase=True)
+                            ans = self.calcCurveLength(self.curvePoints)
+                            ans = ans * self.actual
+                            middle_point = QPoint(0.5 * self.curvePoints[1].x() + 0.5 * self.curvePoints[0].x() + 20,
+                                                  0.5 * self.curvePoints[1].y() + 0.5 * self.curvePoints[0].y() - 50)
+                            self.result = "距离：{} mm".format(str(round(float(ans), 2)))
+                            self.paintText(str(round(float(ans), 2)), middle_point)
+                            self.curvePoints = []
+                            self.isCurve = -1
+                            self.curveDone = False
+                            self.unsetTemporaryCursor()
+                            self.sigTaskFinished.emit()
+                            return
+                    self.revert()
+                    self.sigRightClicked.emit()
+        except Exception as e:
+            SystemLogger.log_error("QGraphicsView_MousePressEvent Error"+str(e))
 
     def hasPic(self):
         return self.lastPic is not None
 
     def mouseReleaseEvent(self, QMouseEvent):
-        if self.attr == "Picture":
-            self.pressed = False
-            if self.dynamicRectSelection and self.dynamicRectStartPoint:
-                self.dynamicRectSelection = False
-                self.unsetTemporaryCursor()
-                if self.lastPic is not None and self.cropped_pixmap is not None:
-                    self.finishedTask = True
-                else:
-                    self.revert()
+        try:
+            if self.attr == "Picture":
+                self.pressed = False
+                if self.dynamicRectSelection and self.dynamicRectStartPoint:
+                    self.dynamicRectSelection = False
+                    self.unsetTemporaryCursor()
+                    if self.lastPic is not None and self.cropped_pixmap is not None:
+                        self.finishedTask = True
+                    else:
+                        self.revert()
 
-            if self.selectedPoint == -1:
-                self.setCurrentCursor(self.chooseCursor())
+                if self.selectedPoint == -1:
+                    self.setCurrentCursor(self.chooseCursor())
+        except Exception as e:
+            SystemLogger.log_error("QGraphicsView_MouseReleaseEvent Error"+str(e))
 
     def mouseMoveEvent(self, QMouseEvent):
-        if self.attr == "Picture":
+        try:
+            if self.attr == "Picture":
 
 
-            if len(self.curvePoints)>0 and self.curveDone==False:
-                num = len(self.curvePoints)
-                self.paintLine(self.curvePoints[num - 1], self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
-            if len(self.volPoint)>0 and self.volDone==False:
-                num = len(self.volPoint)
-                self.paintLine(self.volPoint[num - 1], self.mapToScene(QMouseEvent.pos()), clear=True,
-                               appendList=False)
+                if len(self.curvePoints)>0 and self.curveDone==False:
+                    num = len(self.curvePoints)
+                    self.paintLine(self.curvePoints[num - 1], self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
+                if len(self.volPoint)>0 and self.volDone==False:
+                    num = len(self.volPoint)
+                    self.paintLine(self.volPoint[num - 1], self.mapToScene(QMouseEvent.pos()), clear=True,
+                                   appendList=False)
 
-            if len(self.areaPoints)>0 and self.areaDone==False:
-                num=len(self.areaPoints)
-                self.paintLine(self.areaPoints[num-1],self.mapToScene(QMouseEvent.pos()),clear=True, appendList=False)
-            if len(self.nosePoints)==1 and self.dynamicLineStartPoint is not None:
-                self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
-            if len(self.dotLine)==1 and self.dynamicLineStartPoint is not None:
-                self.paintLine(self.dynamicLineStartPoint,self.mapToScene(QMouseEvent.pos()),clear=True, appendList=False)
+                if len(self.areaPoints)>0 and self.areaDone==False:
+                    num=len(self.areaPoints)
+                    self.paintLine(self.areaPoints[num-1],self.mapToScene(QMouseEvent.pos()),clear=True, appendList=False)
+                if len(self.nosePoints)==1 and self.dynamicLineStartPoint is not None:
+                    self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
+                if len(self.dotLine)==1 and self.dynamicLineStartPoint is not None:
+                    self.paintLine(self.dynamicLineStartPoint,self.mapToScene(QMouseEvent.pos()),clear=True, appendList=False)
 
-            if self.dynamicRectSelection and self.dynamicRectStartPoint is not None and self.pressed:
-                self.paintRect(self.dynamicRectStartPoint, self.mapToScene(QMouseEvent.pos()))
-            elif self.dynamicLineSelection and self.dynamicLineStartPoint is not None:
-                self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
-            elif -1 < self.dynamicAngleSelectionPhase <= 2 and self.dynamicLineStartPoint is not None:
-                self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
-            if self.lastMousePos is not None and self.pressed and not self.dynamicRectSelection:
-                mouseDelta = self.mapToScene(QMouseEvent.pos()) - self.mapToScene(self.lastMousePos)
-                self.moveScene(mouseDelta)
-                self.lastMousePos = QMouseEvent.pos()
-            QGraphicsView.mouseMoveEvent(self,QMouseEvent)
+                if self.dynamicRectSelection and self.dynamicRectStartPoint is not None and self.pressed:
+                    self.paintRect(self.dynamicRectStartPoint, self.mapToScene(QMouseEvent.pos()))
+                elif self.dynamicLineSelection and self.dynamicLineStartPoint is not None:
+                    self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
+                elif -1 < self.dynamicAngleSelectionPhase <= 2 and self.dynamicLineStartPoint is not None:
+                    self.paintLine(self.dynamicLineStartPoint, self.mapToScene(QMouseEvent.pos()), clear=True, appendList=False)
+                if self.lastMousePos is not None and self.pressed and not self.dynamicRectSelection:
+                    mouseDelta = self.mapToScene(QMouseEvent.pos()) - self.mapToScene(self.lastMousePos)
+                    self.moveScene(mouseDelta)
+                    self.lastMousePos = QMouseEvent.pos()
+                QGraphicsView.mouseMoveEvent(self,QMouseEvent)
+        except Exception as e:
+            SystemLogger.log_error("QGraphicsView_MouseMoveEvent Error"+str(e))
 
     def moveScene(self, delta: QPointF):
         delta *= self.getMultipier()
@@ -1243,6 +1315,15 @@ class customedGraphicsView(QGraphicsView):
             scene.addItem(self.lastPic)
             self.setScene(scene)
         self.fitInView(self.lastPic, Qt.KeepAspectRatio)
+        self.lastScale = self.getMultipier()
+        self.curScale = self.getMultipier()
+        self.repaint()
+
+
+    def clear(self):
+        self.lastTask = None
+        scene = QGraphicsScene()
+        self.setScene(scene)
         self.lastScale = self.getMultipier()
         self.curScale = self.getMultipier()
         self.repaint()
