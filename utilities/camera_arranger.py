@@ -8,15 +8,19 @@ from PyQt5.QtMultimedia import QCameraInfo, QCamera, QCameraViewfinderSettings, 
 from PyQt5.QtMultimediaWidgets import QCameraViewfinder
 from PyQt5.QtWidgets import QMessageBox, QPushButton, QGridLayout
 
-from source.logger import SystemLogger, CameraLogger
-
-
+from logger import SystemLogger, CameraLogger
+from pop_ups import PopUps
+import platform
+PLATFORM = platform.system()
+# 该类用于管理摄像头
+SAVE_IMAGE_CODEC = 'png'
 class CameraArranger(QObject):
 
     sigReadyToSave = pyqtSignal()
     
     def __init__(self, parent=None):
         super(CameraArranger, self).__init__(parent)
+        # 存储摄像头信息
         self.cam_v2_lists = []
         # QPushButton
         self.button = None
@@ -26,6 +30,7 @@ class CameraArranger(QObject):
         self.display_column = 2
         self.error_count = 0
 
+    # 把主界面中的一个按钮绑定到开始/结束拍摄的事件上，默认第一次点击按钮是开始拍摄。
     def bindReusableButton(self, reusable_button):
         if isinstance(reusable_button, QPushButton):
             self.button = reusable_button
@@ -33,6 +38,7 @@ class CameraArranger(QObject):
         else:
             SystemLogger.log_error("Bind button with camera arranger failed!")
 
+    # 把主界面的一个GridLayout设为输出目的地，column_count为分几列输出
     def setLayout(self, display_layout:QGridLayout, column_count=2):
         self.display_layout = display_layout
         self.display_column = column_count
@@ -62,8 +68,9 @@ class CameraArranger(QObject):
             button.setEnabled(True)
             button.repaint()
 
-    def initialize(self, codec="png", resolution="max", camera_assert_count=3):
+    def initialize(self, codec=SAVE_IMAGE_CODEC, resolution="max", camera_assert_count=3):
         self.online_webcams = QCameraInfo.availableCameras()
+        CameraLogger.log_info(self.online_webcams)
         cameracount = len(self.online_webcams)
         if cameracount < camera_assert_count:
             SystemLogger.log_warning("Camera count < {}! Current cameras online:{}".format(camera_assert_count,cameracount))
@@ -78,32 +85,54 @@ class CameraArranger(QObject):
             camera_layout = self.display_layout
             camera_layout.addWidget(camera_vf, int(i/self.display_column), i % self.display_column)
             cam = QCamera(self.online_webcams[i])
-            cam.load()
+            cam.error.connect(lambda: self.cameraAlert(cam.errorString()))
+            if PLATFORM == "Windows":
+                cam.load()
+            CameraLogger.log_info(cam.status())
             supported_resolutions = cam.supportedViewfinderResolutions()
             cam.setViewfinder(camera_vf)
             vf_setting = QCameraViewfinderSettings()
+            vfs_valid = True
             if resolution == "max":
-                vf_setting.setResolution(supported_resolutions[-1])
+                if len(supported_resolutions) > 0:
+                    vf_setting.setResolution(supported_resolutions[-1])
+                else:
+                    CameraLogger.log_error("Viewfinder set max resolution failed. Failed to get supported resolutions.")
+                    vfs_valid = False
             elif resolution == "min":
-                vf_setting.setResolution(supported_resolutions[0])
+                if len(supported_resolutions) > 0:
+                    vf_setting.setResolution(supported_resolutions[0])
+                else:
+                    CameraLogger.log_error("Viewfinder set min resolution failed. Failed to get supported resolutions.")
+                    vfs_valid = False
             elif isinstance(resolution, QSize):
                 vf_setting.setResolution(resolution)
             cam.setCaptureMode(QCamera.CaptureStillImage)
-            cam.error.connect(lambda: self.cameraAlert(cam.errorString()))
-            cam.setViewfinderSettings(vf_setting)
+            if vfs_valid:
+                cam.setViewfinderSettings(vf_setting)
             imageSettings = QImageEncoderSettings()
             imageSettings.setCodec(codec)
             imageSettings.setQuality(QMultimedia.VeryHighQuality)
+            ims_valid = True
             if resolution == "max":
-                imageSettings.setResolution(supported_resolutions[-1])
+                if len(supported_resolutions) > 0:
+                    imageSettings.setResolution(supported_resolutions[-1])
+                else:
+                    CameraLogger.log_error("ImageSetting set max resolution failed. Failed to get supported resolutions.")
+                    ims_valid = False
             elif resolution == "min":
-                imageSettings.setResolution(supported_resolutions[0])
+                if len(supported_resolutions) > 0:
+                    imageSettings.setResolution(supported_resolutions[0])
+                else:
+                    CameraLogger.log_error("ImageSetting set min resolution failed. Failed to get supported resolutions.")
+                    ims_valid = False
             elif isinstance(resolution, QSize):
                 imageSettings.setResolution(resolution)
             SystemLogger.log_info("Camera {} resolution {}".format(self.online_webcams[i].description(),imageSettings.resolution()))
             capture = QCameraImageCapture(cam)
             capture.error.connect(self.captureError)
-            capture.setEncodingSettings(imageSettings)
+            if ims_valid:
+                capture.setEncodingSettings(imageSettings)
             capture.setCaptureDestination(QCameraImageCapture.CaptureToFile)
             capture.imageSaved.connect(self.imageSaved)
             self.cam_v2_lists.append([cam, camera_vf, capture])
@@ -130,23 +159,12 @@ class CameraArranger(QObject):
             button.setEnabled(False)
             button.repaint()
         if wait_for_saving:
-            self.wait_dialog =QMessageBox(QMessageBox.Information, "正在处理图片……", "正在处理图片，请稍候……", QMessageBox.Yes)
+            self.wait_dialog =PopUps.info_dialog("正在处理图片……", "正在处理图片，请稍候……")
             # confirmError.setWindowFlags(QtCore.Qt.FramelessWindowHint)
-            self.wait_dialog.button(QMessageBox.Yes).setText("确认")
-            self.wait_dialog.setStyleSheet(
-                "QPushButton {"
-                " font: bold 24px;"
-                "padding-left: 3ex;"
-                "padding-right: 3ex;"
-                "padding-top: 1ex;"
-                "padding-bottom: 1ex;"
-                "margin-left:0px;"
-                "}"
-                "QLabel { font:24px}"
-            )
             self.wait_dialog.setModal(True)
             self.wait_dialog.show()
             self.sigReadyToSave.emit()
+
         if button is not None:
             button.clicked.disconnect(self.stopCapture_V2)
             button.clicked.connect(self.startCaptureImage_V2)
@@ -185,40 +203,13 @@ class CameraArranger(QObject):
                     tempstr = file_str + join_char + position_prefix[i]
                 else:
                     tempstr = file_str
-                capture.capture(os.path.join(path_str, tempstr))
+                path = os.path.join(path_str, tempstr)
+                CameraLogger.log_info(path)
+                capture.capture(path)
         except Exception as e:
             SystemLogger.log_info(e)
-            self.error(e)
+            PopUps.error(e)
 
-    def error(self, errstr):
-        warn = QMessageBox(QMessageBox.Warning, "", "{}".format(errstr), QMessageBox.Yes)
-        warn.button(QMessageBox.Yes).setText("确认")
-        warn.setStyleSheet(
-            "QPushButton {"
-            " font: bold 24px;"
-            "padding-left: 3ex;"
-            "padding-right: 3ex;"
-            "padding-top: 1ex;"
-            "padding-bottom: 1ex;"
-            "margin-left:0px;"
-            "}"
-            "QLabel { font:24px}"
-        )
-        return warn.exec()
 
     def saveImageInfo(self, success_count, fail_count):
-        info = QMessageBox(QMessageBox.Information, "保存图片结果", "图像已保存：{}成功,{}失败".format(success_count,fail_count), QMessageBox.Yes)
-        info.button(QMessageBox.Yes).setText("确认")
-        info.setStyleSheet(
-                "QPushButton {"
-                " font: bold 24px;"
-                "padding-left: 3ex;"
-                "padding-right: 3ex;"
-                "padding-top: 1ex;"
-                "padding-bottom: 1ex;"
-                "margin-left:0px;"
-                "}"
-                "QLabel { font:24px}"
-            )
-        ret = info.exec()
-        return
+        PopUps.info("保存图片结果", "图像已保存：{}成功,{}失败".format(success_count,fail_count))

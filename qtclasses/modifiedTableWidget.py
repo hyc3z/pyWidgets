@@ -1,7 +1,7 @@
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets, QtCore
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QColor, QFont
+from PyQt5.QtGui import QColor, QFont, QBrush
 from PyQt5.QtWidgets import QProxyStyle, QTableWidget, QAbstractItemView, QHeaderView, QTableWidgetItem
 
 
@@ -57,3 +57,11 @@ class modifiedTableWidget(QtWidgets.QTableWidget):
             item = self.item(row, i)
             if isinstance(item, QTableWidgetItem):
                 item.setBackground(color)
+
+    @staticmethod
+    def genTableWidgetItem(text, color):
+        item = QTableWidgetItem(str(text) if text is not None else "")
+        item.setFlags(
+                QtCore.Qt.ItemIsSelectable | QtCore.Qt.ItemIsEnabled)
+        item.setForeground(QBrush(color))
+        return item

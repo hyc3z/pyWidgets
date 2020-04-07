@@ -2,7 +2,6 @@ from PyQt5 import QtWidgets,QtCore,QtGui
 from PyQt5.QtCore import QUrl, QFile, QFileInfo
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
-import sys,os,requests
 from PyQt5.QtWebEngineWidgets import *
 
 
@@ -22,6 +21,6 @@ class pdfReaderQWebView(QWebEngineView):
 if __name__ == '__main__':
     app = QApplication(sys.argv)
     gui = pdfReaderQWebView()
-    gui.setFile("美容师操作指南.pdf")
+    gui.setFile("医生操作指南.pdf")
     gui.show()
     sys.exit(app.exec_())

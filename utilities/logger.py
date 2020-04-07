@@ -21,9 +21,14 @@ class SystemLogger:
 
     @classmethod
     def getFileObj(cls):
-        pathname = "log/system/system_log_{}.txt".format(cls.getDate())
+        date = cls.getDate()
+        pathname = "log/{}/system/system_log_{}.txt".format(date, date)
         # exist = os.path.exists(pathname)
-        f = open(pathname, mode='ab+', buffering=0)
+        try:
+            f = open(pathname, mode='ab+', buffering=0)
+        except FileNotFoundError:
+            os.makedirs("log/{}/system".format(date))
+            f = open(pathname, mode='ab+', buffering=0)
         return f
 
     @staticmethod
@@ -103,11 +108,28 @@ class SystemLogger:
 class CameraLogger(SystemLogger):
     @classmethod
     def getFileObj(cls):
-        pathname = "log/camera/camera_log_{}.txt".format(cls.getDate())
+        date = cls.getDate()
+        pathname = "log/{}/camera/camera_log_{}.txt".format(date,date)
         # exist = os.path.exists(pathname)
-        f = open(pathname, mode='ab+', buffering=0)
+        try:
+            f = open(pathname, mode='ab+', buffering=0)
+        except FileNotFoundError:
+            os.makedirs("log/{}/camera".format(date))
+            f = open(pathname, mode='ab+', buffering=0)
         return f
 
+class DatabaseLogger(SystemLogger):
+    @classmethod
+    def getFileObj(cls):
+        date = cls.getDate()
+        pathname = "log/{}/database/database_log_{}.txt".format(date, date)
+        # exist = os.path.exists(pathname)
+        try:
+            f = open(pathname, mode='ab+', buffering=0)
+        except FileNotFoundError:
+            os.makedirs("log/{}/database".format(date))
+            f = open(pathname, mode='ab+', buffering=0)
+        return f
 
 if __name__ == '__main__':
     SystemLogger.log_info({'2':["3","3"]}, "233")
