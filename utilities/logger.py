@@ -1,5 +1,7 @@
 import datetime
 import os
+import sys
+import traceback
 PRINT_LEVEL_REF = {
         'info': 0,
         'warning': 1,
@@ -58,33 +60,49 @@ class SystemLogger:
         f = cls.getFileObj()
         f.write(logstr.encode('utf-8') + b"\n")
 
+    @classmethod
+    def format_info(cls, *args):
+        logstr = cls.processArgs(args)
+        logstr = "[ii INFO {}] {}".format(cls.getTimeStamp(), logstr)
+        return logstr
+
+    @classmethod
+    def format_error(cls, *args):
+        logstr = cls.processArgs(args)
+        logstr = "[!! ERROR {}] {}".format(cls.getTimeStamp(), logstr)
+        return logstr
+
+    @classmethod
+    def format_warning(cls, *args):
+        logstr = cls.processArgs(args)
+        logstr = "[WW WARNING {}] {}".format(cls.getTimeStamp(), logstr)
+        return logstr
 
     @classmethod
     def log_info(cls, *args):
-        info_str = cls.processArgs(args)
-        logstr = "[ii INFO {}] {}".format(cls.getTimeStamp(), info_str)
+        info_str = cls.format_info(*args)
         if cls.log_level <= LOG_LEVEL_REF['info']:
-            cls.log(logstr)
+            cls.log(info_str)
         if cls.print_level <= PRINT_LEVEL_REF['info']:
-            print(logstr)
+            print(info_str)
 
     @classmethod
     def log_warning(cls, *args):
-        info_str = cls.processArgs(args)
-        logstr = "[WW WARNING {}] {}".format(cls.getTimeStamp(), info_str)
+        warn_str = cls.format_warning(*args)
         if cls.log_level <= LOG_LEVEL_REF['warning']:
-            cls.log(logstr)
+            cls.log(warn_str)
         if cls.print_level <= PRINT_LEVEL_REF['warning']:
-            print(logstr)
+            print(warn_str)
 
     @classmethod
     def log_error(cls, *args):
-        info_str = cls.processArgs(args)
-        logstr = "[!! ERROR {}] {}".format(cls.getTimeStamp(), info_str)
+        error_str = cls.format_warning(*args)
+        trace = traceback.format_exc()
+        error_str += "\n{}".format(trace)
         if cls.log_level <= LOG_LEVEL_REF['error']:
-            cls.log(logstr)
+            cls.log(error_str)
         if cls.print_level <= PRINT_LEVEL_REF['error']:
-            print(logstr)
+            print(error_str)
 
     @classmethod
     def set_print_level(cls, level_str):
@@ -132,4 +150,4 @@ class DatabaseLogger(SystemLogger):
         return f
 
 if __name__ == '__main__':
-    SystemLogger.log_info({'2':["3","3"]}, "233")
+    SystemLogger.log_error("2","3"+"4")

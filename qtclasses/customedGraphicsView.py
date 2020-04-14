@@ -114,6 +114,7 @@ class customedGraphicsView(QGraphicsView):
     sigPreparingFinished = QtCore.pyqtSignal()
     sigTaskFinished = QtCore.pyqtSignal()
     sigDetectCircle = pyqtSignal(QGraphicsPixmapItem)
+    sigEnableReset = pyqtSignal()
 
     def __init__(self, parent=None):
         super(QGraphicsView, self).__init__(parent)
@@ -196,12 +197,16 @@ class customedGraphicsView(QGraphicsView):
         self.worker.sigFinish.connect(self.applyMat)
         self.worker.sigArea.connect(self.setReferencePixelArea)
         self.worker.sigLength.connect(self.setReferencePixels)
+        self.worker.sigReferenceNotFound.connect(self.referenceNotFound)
         self.sigDetectCircle.connect(self.worker.detectCircle)
         # connect(&workerThread, &QThread::finished, worker, &QObject::deleteLater)
         # connect(this, &Controller::operate, worker, &Worker::doWork)
         # connect(worker, &Worker::resultReady, this, &Controller::handleResults);
         self.workerThread.start()
         self.setPen()
+
+    def referenceNotFound(self):
+        self.sigReferenceNotFound.emit()
 
     def getActSize(self):
         actsize = 0
@@ -233,7 +238,8 @@ class customedGraphicsView(QGraphicsView):
             "QLabel { font:24px}"
             "QLineEdit { font:24px}"
         )
-        dialog.setUnit("mm")
+        dialog.setUnit("")
+        dialog.setText("请输入凹陷深度(mm)")
         errstr = " "
         while len(errstr) > 0:
             val = dialog.exec()
@@ -262,6 +268,7 @@ class customedGraphicsView(QGraphicsView):
     def setReferencePixelArea(self, area:float):
         SystemLogger.log_info("Area get!")
         self.referencePixelsArea = area
+        self.sigEnableReset.emit()
 
     def measureVol(self):
         self.isVol=0
@@ -804,6 +811,7 @@ class customedGraphicsView(QGraphicsView):
             self.lastTask()
         elif self.lastTask==self.dotToline:
             self.dynamicLineStartPoint=None
+            self.dotLine = []
             self.lastTask()
         elif self.lastTask==self.measureArea:
             self.lastTask()
