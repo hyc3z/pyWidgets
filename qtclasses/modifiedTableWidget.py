@@ -12,18 +12,19 @@ class modifiedTableWidget(QtWidgets.QTableWidget):
         self.setMouseTracking(True)
         self.lastRowBkColor = QColor(0x00, 0xff, 0x00, 0x00)
         self.previousColorRow = -1
-        self.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        self.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.horizontalHeader().setStretchLastSection(True)
         self.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
         self.verticalHeader().setHidden(True)
-        self.setSelectionMode(QTableWidget.SingleSelection)
+        # self.setSelectionMode(QTableWidget.SingleSelection)
         self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        # self.setShowGrid(False)
+        self.setShowGrid(False)
         # self.setSizeAdjustPolicy(
         #     QtWidgets.QAbstractScrollArea.AdjustToContents)
         self.cellEntered.connect(self.mouseOnRow)
         self.horizontalHeader().sectionClicked.connect(self.sort)
-        self.color = QColor(40, 65, 79)
+        # self.setAlternatingRowColors(True)
+        self.color = QColor("#3eaee9")
         self.asc=False
 
     def sort(self, index:int):
@@ -44,9 +45,9 @@ class modifiedTableWidget(QtWidgets.QTableWidget):
         self.color = color
 
     def mouseOnRow(self, row: int, column: int) -> None:
-        item = self.item(self.previousColorRow, 0)
-        if item is not None:
-            self.setRowColor(self.previousColorRow, self.lastRowBkColor)
+        # item = self.item(self.previousColorRow, 0)
+        # if item is not None:
+        #     self.setRowColor(self.previousColorRow, self.lastRowBkColor)
         item = self.item(row, column)
         if item is not None and not item.isSelected():
             self.setRowColor(row, self.color)

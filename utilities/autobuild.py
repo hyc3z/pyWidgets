@@ -35,51 +35,13 @@ def main():
     icon_file = "icon.ico"
     src_dir = "./src"
     copy_dir = [
-        "./dark",
-        "./light",
-        "./font",
-        "./pic",
+
     ]
     copy_file = [
-        "./light.qss",
-        "./dark.qss",
-        "logo_login.png",
-        "logo_login_cropped.png",
-        "logo_yxy_square.png",
-        "logo_window.png",
-        "logo_zjdxyxy.png",
-        "database.db",
-        "icon.ico"
+
     ]
     src_file = [
-        "camera.py",
-        "camera_thread.py",
-        "customedGraphicsView.py",
-        "dark.qss",
-        "database_controller.py",
-        "database_macros.py",
-        "dialog_exit.py",
-        "dict2py.py",
-        "fetch_thread.py",
-        "helptable_data.py",
-        "levelfour_macros.py",
-        "icon.ico",
-        "login.py",
-        "logo_login.png",
-        "logo_login_cropped.png",
-        "logo_window.png",
-        "logo_yxy_square.png",
-        "logo_zjdxyxy.png",
-        "main.py",
-        "mainwindow.py",
-        "modifiedTableWidget.py",
-        "pwd_util.py",
-        "time_thread.py",
-        "tree_dict.py",
-        "tree_dict_to_qtreewidgetitems.py",
-        "ui_login.py",
-        "ui_mainwindow_4.py",
-        "ui_popup_noicon.py",
+
     ]
     if os.path.exists(work_dir):
         if os.path.isdir(work_dir):

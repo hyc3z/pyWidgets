@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 import sys
 import traceback
@@ -15,23 +16,53 @@ LOG_LEVEL_REF = {
         'emergecy': 4,
     }
 
+def get_logger(filename, logger):
+    if logger is None:
+        logger = logging.getLogger("threading")
+    logger.setLevel(logging.INFO)
+    fh = logging.FileHandler(os.path.join(os.path.split(os.path.realpath(__file__))[0],filename), encoding='utf-8')
+    fmt = '%(asctime)s - %(name)s - %(processName)s - %(threadName)s - %(levelname)s - %(message)s'
+    formatter = logging.Formatter(fmt)
+    fh.setFormatter(formatter)
+    logger.handlers.clear()
+    logger.addHandler(fh)
+    return logger
+
+def global_hook (ttype,tvalue,ttraceback):
+    err_str = ""
+    err_str += "例外类型：{}\n".format(ttype)
+    err_str += "例外对象：{}\n".format(tvalue)
+    i = 1
+    while ttraceback:
+        err_str += "第{}层堆栈信息\n".format(i)
+        tracebackCode = ttraceback.tb_frame.f_code
+        err_str += "文件名：{}\n".format(tracebackCode.co_filename)
+        err_str += "行号：{}\n".format(ttraceback.tb_lineno)
+        err_str += "函数或者模块名：{}\n".format(tracebackCode.co_name)
+        ttraceback = ttraceback.tb_next
+        i += 1
+    SystemLogger.log_error(err_str)
+
 
 class SystemLogger:
-
+    logger = None
     print_level = 1
     log_level = 0
-
     @classmethod
-    def getFileObj(cls):
-        date = cls.getDate()
-        pathname = "log/{}/system/system_log_{}.txt".format(date, date)
+    def getLogger(cls):
+        if cls.logger is None:
+            date = cls.getDate()
+            pathname = "log/{}/system/system_log_{}.txt".format(date, date)
+            try:
+                logger = get_logger(pathname, cls.logger)
+            except Exception as e:
+                try:
+                    os.makedirs("log/{}/system".format(date))
+                except Exception as e3:
+                    pass
+                logger = get_logger(pathname, cls.logger)
         # exist = os.path.exists(pathname)
-        try:
-            f = open(pathname, mode='ab+', buffering=0)
-        except FileNotFoundError:
-            os.makedirs("log/{}/system".format(date))
-            f = open(pathname, mode='ab+', buffering=0)
-        return f
+        return logger
 
     @staticmethod
     def getTimeStamp():
@@ -57,7 +88,7 @@ class SystemLogger:
     @classmethod
     def log(cls, *args):
         logstr = cls.processArgs(args)
-        f = cls.getFileObj()
+        f = cls.getLogger()
         f.write(logstr.encode('utf-8') + b"\n")
 
     @classmethod
@@ -81,28 +112,34 @@ class SystemLogger:
     @classmethod
     def log_info(cls, *args):
         info_str = cls.format_info(*args)
-        if cls.log_level <= LOG_LEVEL_REF['info']:
-            cls.log(info_str)
-        if cls.print_level <= PRINT_LEVEL_REF['info']:
-            print(info_str)
+        # if cls.log_level <= LOG_LEVEL_REF['info']:
+        #     cls.log(info_str)
+        # if cls.print_level <= PRINT_LEVEL_REF['info']:
+        #     print(info_str)
+        lg = cls.getLogger()
+        lg.info(info_str)
 
     @classmethod
     def log_warning(cls, *args):
         warn_str = cls.format_warning(*args)
-        if cls.log_level <= LOG_LEVEL_REF['warning']:
-            cls.log(warn_str)
-        if cls.print_level <= PRINT_LEVEL_REF['warning']:
-            print(warn_str)
+        # if cls.log_level <= LOG_LEVEL_REF['warning']:
+        #     cls.log(warn_str)
+        # if cls.print_level <= PRINT_LEVEL_REF['warning']:
+        #     print(warn_str)
+        lg = cls.getLogger()
+        lg.warning(warn_str)
 
     @classmethod
     def log_error(cls, *args):
-        error_str = cls.format_warning(*args)
+        error_str = cls.format_error(*args)
         trace = traceback.format_exc()
         error_str += "\n{}".format(trace)
-        if cls.log_level <= LOG_LEVEL_REF['error']:
-            cls.log(error_str)
-        if cls.print_level <= PRINT_LEVEL_REF['error']:
-            print(error_str)
+        # if cls.log_level <= LOG_LEVEL_REF['error']:
+        #     cls.log(error_str)
+        # if cls.print_level <= PRINT_LEVEL_REF['error']:
+        #     print(error_str)
+        lg = cls.getLogger()
+        lg.error(error_str)
 
     @classmethod
     def set_print_level(cls, level_str):
@@ -125,29 +162,35 @@ class SystemLogger:
 
 class CameraLogger(SystemLogger):
     @classmethod
-    def getFileObj(cls):
+    def getLogger(cls):
         date = cls.getDate()
-        pathname = "log/{}/camera/camera_log_{}.txt".format(date,date)
-        # exist = os.path.exists(pathname)
+        pathname = "log/{}/camera/camera_log_{}.txt".format(date, date)
         try:
-            f = open(pathname, mode='ab+', buffering=0)
-        except FileNotFoundError:
-            os.makedirs("log/{}/camera".format(date))
-            f = open(pathname, mode='ab+', buffering=0)
-        return f
+            logger = get_logger(pathname, cls.logger)
+        except Exception as e:
+            try:
+                os.makedirs("log/{}/camera".format(date))
+            except Exception as e3:
+                pass
+            logger = get_logger(pathname, cls.logger)
+        # exist = os.path.exists(pathname)
+        return logger
 
 class DatabaseLogger(SystemLogger):
     @classmethod
-    def getFileObj(cls):
+    def getLogger(cls):
         date = cls.getDate()
         pathname = "log/{}/database/database_log_{}.txt".format(date, date)
-        # exist = os.path.exists(pathname)
         try:
-            f = open(pathname, mode='ab+', buffering=0)
-        except FileNotFoundError:
-            os.makedirs("log/{}/database".format(date))
-            f = open(pathname, mode='ab+', buffering=0)
-        return f
+            logger = get_logger(pathname, cls.logger)
+        except Exception as e:
+            try:
+                os.makedirs("log/{}/database".format(date))
+            except Exception as e3:
+                pass
+            logger = get_logger(pathname, cls.logger)
+        # exist = os.path.exists(pathname)
+        return logger
 
 if __name__ == '__main__':
-    SystemLogger.log_error("2","3"+"4")
+    SystemLogger.log_info("2","3"+"4")
